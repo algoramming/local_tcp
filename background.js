@@ -1,4 +1,4 @@
-// LocalTCP - background.js
+// Local TCP - background.js
 // Core TCP bridge service worker
 // Handles all TCP connections from external web apps
 
@@ -19,23 +19,23 @@ async function handleMessage(request, sender) {
       host = stored.printerHost;
       port = stored.printerPort;
       
-      if (!host || !port) {
+    if (!host || !port) {
         return { 
           success: false, 
-          error: 'Host and port are required. Pass them in the API or configure them in the LocalTCP extension.' 
+          error: 'Host and port are required. Pass them in the API or configure them in the Local TCP extension.' 
         };
       }
     }
   }
 
   switch (action) {
-    // ── PING: Check if LocalTCP extension is installed & active ──────────────
+    // ── PING: Check if Local TCP extension is installed & active ──────────────
     case 'PING': {
       return {
         success: true,
-        name: 'LocalTCP',
+        name: 'Local TCP',
         version: chrome.runtime.getManifest().version,
-        message: 'Your browser can finally talk with your local TCP.'
+        message: 'Your browser can finally talk with local TCP.'
       };
     }
 

@@ -1,5 +1,6 @@
-# LocalTCP
-### Your browser can finally talk with your local TCP.
+![Local TCP Chrome Extension Promotional Banner](promo_banner.png)
+
+# Local TCP
 
 A Chrome Extension that bridges any web app to any local TCP device.
 No native app. No server. Just install and print.
@@ -9,7 +10,7 @@ No native app. No server. Just install and print.
 ## Project Structure
 
 ```
-localtcp/
+local_tcp/
 ├── chrome_extension/          ← Publish this to Chrome Web Store
 │   ├── manifest.json
 │   ├── background.js          ← Core TCP bridge logic
@@ -41,6 +42,8 @@ localtcp/
 3. Click **Load Unpacked**
 4. Select the `chrome_extension/` folder
 5. Copy the **Extension ID** shown (e.g. `abcdefghijklmnopqrstuvwxyz123456`)
+
+> **⚠️ Security Note:** By default, Chrome correctly isolates extensions. In order to allow your Web App to talk to the extension, you must explicitly list your Web App's URL inside `manifest.json` under the `externally_connectable` property (e.g., `"https://portal.yourdomain.com/*"`). Security wildcards covering all domains (`"https://*/*"`) are outright rejected by Chrome!
 
 ### Step 2 — Set Extension ID in Flutter
 
@@ -109,37 +112,11 @@ LocalTcpBanner(
 
 ## Chrome Extension API
 
-Any web app can use LocalTCP directly:
+Any web app can use Local TCP directly to connect to TCP devices. 
 
-```javascript
-const EXTENSION_ID = 'your-extension-id';
+We have compiled a complete reference manual demonstrating how to execute commands like `PING`, `CONNECT`, `PRINT`, `SEND`, `STATUS`, and `DISCONNECT`, including our very helpful **Implicit Fallback** storage feature.
 
-// Check if installed
-chrome.runtime.sendMessage(EXTENSION_ID, { action: 'PING' }, (res) => {
-  console.log(res); // { success: true, name: 'LocalTCP', version: '1.0.0' }
-});
-
-// Connect
-chrome.runtime.sendMessage(EXTENSION_ID, {
-  action: 'CONNECT',
-  host: '192.168.10.199',
-  port: 9100,
-  connectionId: 'my-printer'
-}, (res) => console.log(res));
-
-// Send bytes
-chrome.runtime.sendMessage(EXTENSION_ID, {
-  action: 'SEND',
-  connectionId: 'my-printer',
-  data: [/* ESC/POS byte array */]
-}, (res) => console.log(res));
-
-// Disconnect
-chrome.runtime.sendMessage(EXTENSION_ID, {
-  action: 'DISCONNECT',
-  connectionId: 'my-printer'
-}, (res) => console.log(res));
-```
+📚 **[Read the Full API Documentation (API.md)](API.md)**
 
 ---
 
@@ -161,7 +138,7 @@ Flutter Web CRM
      │
      │ dart:js (chrome.runtime.sendMessage)
      ▼
-LocalTCP Chrome Extension (background.js)
+Local TCP Chrome Extension (background.js)
      │
      │ chrome.sockets.tcp
      ▼

@@ -1,4 +1,4 @@
-// LocalTCP - popup.js
+// Local TCP - popup.js
 
 const hostInput   = document.getElementById('hostInput');
 const portInput   = document.getElementById('portInput');

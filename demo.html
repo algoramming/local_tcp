@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LocalTCP Web Test</title>
+  <title>Local TCP Web Test</title>
   <style>
     body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
     .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
@@ -13,12 +13,12 @@
 </head>
 <body>
 
-  <h1>LocalTCP Test Dashboard</h1>
+  <h1>Local TCP Test Dashboard</h1>
   <p>Make sure this page is running on <b>http://localhost</b> or <b>http://127.0.0.1</b></p>
   
   <div class="box">
-    <label>Extension ID: (Get this from chrome://extensions)</label><br>
-    <input type="text" id="extId" placeholder="abcdefghijklmnopqrstuvwxyz123456" />
+    <label>Extension Status: No ID Required Anymore!</label><br>
+    <p style="font-size: 12px; color: gray;">You just need to ensure the extension is loaded and turned ON in Chrome.</p>
   </div>
 
   <div class="box">
@@ -45,18 +45,24 @@
     }
 
     function sendToExtension(payload) {
-      const extId = document.getElementById('extId').value.trim();
-      if (!extId) return alert('Please enter your Extension ID first!');
-      if (!chrome || !chrome.runtime) return logMsg("Error: chrome.runtime is not available here. Ensure you are on http://localhost or https.");
-
-      logMsg(`Sending: ${payload.action}...`);
-      chrome.runtime.sendMessage(extId, payload, response => {
-        if (chrome.runtime.lastError) {
-           logMsg("Error: " + chrome.runtime.lastError.message);
-        } else {
-           logMsg(response);
+      logMsg(`Broadcasting: ${payload.action}...`);
+      
+      const messageId = Math.random().toString(36).substring(7);
+      
+      const handler = (event) => {
+        if (event.source === window && event.data?.source === 'localtcp_res' && event.data.messageId === messageId) {
+          window.removeEventListener('message', handler);
+          logMsg(event.data.response);
         }
-      });
+      };
+      
+      window.addEventListener('message', handler);
+      
+      window.postMessage({
+        source: 'localtcp_req',
+        messageId: messageId,
+        ...payload
+      }, '*');
     }
 
     function ping() {
