@@ -41,17 +41,11 @@ local_tcp/
 2. Enable **Developer Mode** (top right)
 3. Click **Load Unpacked**
 4. Select the `chrome_extension/` folder
-5. Copy the **Extension ID** shown (e.g. `abcdefghijklmnopqrstuvwxyz123456`)
+5. Turn the extension toggle ON!
 
-> **⚠️ Security Note:** By default, Chrome correctly isolates extensions. In order to allow your Web App to talk to the extension, you must explicitly list your Web App's URL inside `manifest.json` under the `externally_connectable` property (e.g., `"https://portal.yourdomain.com/*"`). Security wildcards covering all domains (`"https://*/*"`) are outright rejected by Chrome!
+### Step 2 — No Extension ID Required!
 
-### Step 2 — Set Extension ID in Flutter
-
-Open `lib/services/local_tcp_config.dart` and paste your ID:
-
-```dart
-static const String extensionId = 'abcdefghijklmnopqrstuvwxyz123456';
-```
+Because Local TCP automatically injects the networking APIs directly into standard web pages natively, you do **not** need to configure, hardcode, or memorize your Extension ID anywhere in your codebase! Just trigger your payloads dynamically.
 
 ### Step 3 — Add to your Flutter CRM
 
