@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LocalTCP</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── CSS Variables ─────────────────────────────────── */
+    :root {
+      --bg: #0d0d0f;
+      --surface: #18181c;
+      --surface2: #1f1f25;
+      --border: #2a2a35;
+      --accent: #00e5a0;
+      --accent-dim: #00e5a015;
+      --accent-glow: #00e5a030;
+      --text: #f0f0f5;
+      --text-muted: #6b6b80;
+      --text-sub: #9090a8;
+      --error: #ff5370;
+      --warning: #ffb347;
+      --success: #00e5a0;
+      --radius: 10px;
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="light"] {
+      --bg: #f4f4f8;
+      --surface: #ffffff;
+      --surface2: #ebebf2;
+      --border: #d8d8e8;
+      --accent: #007a55;
+      --accent-dim: #007a5510;
+      --accent-glow: #007a5520;
+      --text: #0d0d1a;
+      --text-muted: #9090a8;
+      --text-sub: #5a5a72;
+      --error: #d63031;
+      --warning: #e17055;
+      --success: #007a55;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 320px;
+      min-height: 420px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      transition: background var(--transition), color var(--transition);
+      overflow: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────── */
+    .header {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      position: relative;
+    }
+
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.4;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+    }
+
+    .logo svg { width: 18px; height: 18px; color: #0d0d0f; position: relative; z-index: 1; }
+
+    .brand-text { display: flex; flex-direction: column; line-height: 1; }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .brand-tag {
+      font-size: 9px;
+      font-weight: 400;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 2px;
+    }
+
+    /* ── Theme Toggle ──────────────────────────────────── */
+    .theme-toggle {
+      position: relative;
+      width: 44px; height: 24px;
+      cursor: pointer;
+    }
+
+    .theme-toggle input { display: none; }
+
+    .toggle-track {
+      width: 100%; height: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: all var(--transition);
+      display: flex; align-items: center;
+      padding: 0 3px;
+      position: relative;
+    }
+
+    .toggle-thumb {
+      width: 18px; height: 18px;
+      background: var(--accent);
+      border-radius: 50%;
+      transition: transform var(--transition), background var(--transition);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px;
+    }
+
+    .theme-toggle input:checked ~ .toggle-track .toggle-thumb {
+      transform: translateX(20px);
+    }
+
+    /* ── Status Bar ────────────────────────────────────── */
+    .status-bar {
+      margin: 14px 14px 0;
+      padding: 10px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex; align-items: center; gap: 8px;
+      transition: all var(--transition);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background var(--transition);
+    }
+
+    .status-dot.active {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--accent-glow);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.error { background: var(--error); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-sub);
+      flex: 1;
+    }
+
+    /* ── Body ──────────────────────────────────────────── */
+    .body { padding: 14px; }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Input Group ───────────────────────────────────── */
+    .input-row {
+      display: flex; gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .input-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    .input-wrap.port { flex: 0 0 80px; }
+
+    .input-label {
+      font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 9px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      transition: all var(--transition);
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    input::placeholder { color: var(--text-muted); }
+
+    /* ── Buttons ───────────────────────────────────────── */
+    .btn-row {
+      display: flex; gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--transition);
+      letter-spacing: 0.3px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0d0d0f;
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* ── Connection Log ────────────────────────────────── */
+    .log-section {
+      margin-top: 14px;
+    }
+
+    .log-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+      height: 80px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+
+    .log-box::-webkit-scrollbar { width: 3px; }
+    .log-box::-webkit-scrollbar-track { background: transparent; }
+    .log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .log-entry { display: flex; gap: 6px; }
+    .log-time { color: var(--text-muted); flex-shrink: 0; }
+    .log-msg.success { color: var(--success); }
+    .log-msg.error { color: var(--error); }
+    .log-msg.info { color: var(--text-sub); }
+
+    /* ── Divider ───────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+
+    /* ── Footer ────────────────────────────────────────── */
+    .footer {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-version {
+      font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+    }
+
+    .footer-link {
+      font-size: 9px;
+      color: var(--accent);
+      text-decoration: none;
+      font-family: 'JetBrains Mono', monospace;
+      opacity: 0.7;
+      transition: opacity var(--transition);
+    }
+
+    .footer-link:hover { opacity: 1; }
+
+    /* ── Animations ────────────────────────────────────── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .body, .header { animation: fadeIn 0.25s ease both; }
+  </style>
+</head>
+<body data-theme="dark">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">LocalTCP</span>
+        <span class="brand-tag">tcp bridge v1.0.0</span>
+      </div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <label class="theme-toggle" title="Toggle theme">
+      <input type="checkbox" id="themeToggle" />
+      <div class="toggle-track">
+        <div class="toggle-thumb" id="toggleIcon">🌙</div>
+      </div>
+    </label>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- Status -->
+    <div class="status-bar" id="statusBar">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">Ready — enter host and port to connect</span>
+    </div>
+
+    <!-- Inputs -->
+    <div style="margin-top: 14px;">
+      <div class="section-label">Connection</div>
+      <div class="input-row">
+        <div class="input-wrap">
+          <div class="input-label">Host / IP</div>
+          <input type="text" id="hostInput" placeholder="192.168.10.199" />
+        </div>
+        <div class="input-wrap port">
+          <div class="input-label">Port</div>
+          <input type="number" id="portInput" placeholder="9100" min="1" max="65535" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn btn-primary" id="testBtn">Test Connection</button>
+      <button class="btn btn-secondary" id="saveBtn">Save</button>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- Log -->
+    <div class="log-section">
+      <div class="section-label">Activity Log</div>
+      <div class="log-box" id="logBox">
+        <div class="log-entry">
+          <span class="log-time">--:--:--</span>
+          <span class="log-msg info">LocalTCP ready. Waiting for connections...</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span class="footer-version">LocalTCP © 2025</span>
+    <a href="#" class="footer-link">docs →</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
