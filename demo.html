@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LocalTCP Web Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
+    input, button { padding: 8px; margin: 4px 0; }
+    input { width: calc(100% - 20px); }
+    #log { background: #111; color: #0f0; padding: 10px; height: 150px; overflow-y: scroll; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+  <h1>LocalTCP Test Dashboard</h1>
+  <p>Make sure this page is running on <b>http://localhost</b> or <b>http://127.0.0.1</b></p>
+  
+  <div class="box">
+    <label>Extension ID: (Get this from chrome://extensions)</label><br>
+    <input type="text" id="extId" placeholder="abcdefghijklmnopqrstuvwxyz123456" />
+  </div>
+
+  <div class="box">
+    <h3>1. Connect / Override Test</h3>
+    <p>Leave Host/Port blank to test the Extension's automatic fallback!</p>
+    <input type="text" id="host" placeholder="Host (e.g., 127.0.0.1 or blank)" />
+    <input type="number" id="port" placeholder="Port (e.g., 9100 or blank)" />
+  </div>
+
+  <div class="box">
+    <h3>2. Action</h3>
+    <button onclick="ping()">Ping Extension</button>
+    <button onclick="printData()">Send 'Hello World'</button>
+  </div>
+
+  <h3>Response Log</h3>
+  <div id="log"></div>
+
+  <script>
+    function logMsg(msg) {
+      const logBox = document.getElementById('log');
+      logBox.innerHTML += `<div>> ${JSON.stringify(msg)}</div>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function sendToExtension(payload) {
+      const extId = document.getElementById('extId').value.trim();
+      if (!extId) return alert('Please enter your Extension ID first!');
+      if (!chrome || !chrome.runtime) return logMsg("Error: chrome.runtime is not available here. Ensure you are on http://localhost or https.");
+
+      logMsg(`Sending: ${payload.action}...`);
+      chrome.runtime.sendMessage(extId, payload, response => {
+        if (chrome.runtime.lastError) {
+           logMsg("Error: " + chrome.runtime.lastError.message);
+        } else {
+           logMsg(response);
+        }
+      });
+    }
+
+    function ping() {
+      sendToExtension({ action: 'PING' });
+    }
+
+    function printData() {
+      const host = document.getElementById('host').value.trim();
+      const port = document.getElementById('port').value.trim();
+      
+      const payload = { action: 'PRINT', data: [72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 10] }; // "Hello World\n"
+      
+      if (host && port) {
+        payload.host = host;
+        payload.port = parseInt(port);
+      }
+
+      sendToExtension(payload);
+    }
+  </script>
+</body>
+</html>
