@@ -73,14 +73,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Rust installer
-        run: cargo build --release --manifest-path ${{ env.RUST_DIR }}/Cargo.toml
+      - name: Build Rust installer (static musl — no glibc/libc dependency)
+        # Default x86_64-unknown-linux-gnu dynamically links glibc, so the binary
+        # fails on machines with an older glibc ("GLIBC_2.xx not found") and won't
+        # run at all on musl distros (Alpine). The musl target links libc
+        # statically (crt-static is musl's default) → a fully static binary that
+        # runs on ANY Linux distro with zero runtime library dependencies.
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-unknown-linux-musl
+          sudo apt-get update && sudo apt-get install -y musl-tools
+          cargo build --release --target x86_64-unknown-linux-musl \
+            --manifest-path ${RUST_DIR}/Cargo.toml
       - name: Package self-extracting .run
         run: |
           set -euo pipefail
-          sudo apt-get update && sudo apt-get install -y makeself
+          sudo apt-get install -y makeself
           mkdir -p payload out
-          cp ${RUST_DIR}/target/release/localtcp-installer payload/
+          cp ${RUST_DIR}/target/x86_64-unknown-linux-musl/release/localtcp-installer payload/
           chmod +x payload/localtcp-installer
           makeself --nox11 payload out/localtcp-linux-installer.run \
             "Local TCP Installer" ./localtcp-installer install
