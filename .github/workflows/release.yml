@@ -35,7 +35,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Rust installer
-        run: cargo build --release --manifest-path ${{ env.RUST_DIR }}/Cargo.toml
+        # Run from the crate dir so Cargo discovers installers/rust/.cargo/config.toml
+        # (crt-static), which links VCRUNTIME140 statically. Cargo resolves config
+        # from the working directory, not from --manifest-path.
+        working-directory: ${{ env.RUST_DIR }}
+        run: cargo build --release
       - name: Assemble assets
         shell: pwsh
         run: |

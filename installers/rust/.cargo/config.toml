@@ -1,0 +1,19 @@
+# Statically link the MSVC C runtime into the Windows .exe.
+#
+# Without this, the default `x86_64-pc-windows-msvc` build dynamically links
+# VCRUNTIME140.dll (the Visual C++ Redistributable). On a clean Windows machine
+# that DLL is absent, so the installer fails to launch with:
+#   "The code execution cannot proceed because VCRUNTIME140.dll was not found."
+#
+# `+crt-static` links libcmt statically, producing a fully self-contained
+# binary with no VC++ redistributable dependency — matching this crate's
+# "dependency-free, statically-linkable" design. Scoped to the Windows MSVC
+# targets so macOS/Linux builds are unaffected.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
