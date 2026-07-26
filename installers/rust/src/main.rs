@@ -200,20 +200,20 @@ fn owns_console() -> bool {
 fn install() -> Result<(), String> {
     banner(&format!("Local TCP Bridge — Installer v{VERSION}"));
 
-    let node = match find_node() {
-        Some(n) => n,
-        None => {
-            warn!("[WARN] Node.js was not found in PATH or in any known install location.");
-            install_node_automatically().ok_or_else(|| {
-                format!("Node.js is required but could not be installed automatically.\n  {}", node_install_hint())
-            })?
-        }
-    };
-    say!("[OK] Using Node at: {node}");
-
+    // Resolve the install dir first: a Node.js we have to fetch ourselves is
+    // extracted into it, so it has to exist before Node detection runs.
     let dir = resolved_install_dir()?;
     fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     say!("[INFO] Install dir: {}", dir.display());
+
+    let node = match find_node().or_else(|| private_node(&dir)) {
+        Some(n) => n,
+        None => {
+            warn!("[WARN] Node.js was not found in PATH or in any known install location.");
+            install_node_automatically(&dir)?
+        }
+    };
+    say!("[OK] Using Node at: {node}");
 
     // 1. Write index.js. On Unix, rewrite the shebang to the absolute node path
     //    so execution never depends on the (often minimal) inherited PATH.
@@ -253,7 +253,14 @@ fn install() -> Result<(), String> {
         register_unix(&manifest_file, &manifest)?;
     }
 
-    verify(&dir, &host_path, &node);
+    // An install that can't be verified must not report success — same rule the
+    // uninstaller follows.
+    let failures = verify(&dir, &host_path, &node);
+    if failures > 0 {
+        return Err(format!(
+            "the install did not verify ({failures} failed check(s) above) — the bridge may not work"
+        ));
+    }
 
     banner("✅ Installed");
     say!("Restart your browser completely, then use the Local TCP extension.");
@@ -274,6 +281,8 @@ fn uninstall() -> Result<(), String> {
     let dir = resolved_install_dir()?;
     let manifest_file = format!("{HOST_NAME}.json");
     let mut problems: Vec<String> = Vec::new();
+
+    report_recorded_node(&dir);
 
     if cfg!(windows) {
         unregister_windows(&mut problems);
@@ -317,6 +326,36 @@ fn uninstall() -> Result<(), String> {
     banner("✅ Uninstalled");
     say!("Restart your browser to finish removing the host.");
     Ok(())
+}
+
+// --- Uninstall-time Node.js diagnostic ---------------------------------------
+// Uninstalling deletes files and registry entries only — it never runs or needs
+// Node.js, so a Node the user removed after installing can neither break nor
+// block removal. This reports the situation for the log; it is deliberately
+// incapable of failing the uninstall, and never installs anything.
+fn report_recorded_node(dir: &Path) {
+    let recorded = if cfg!(windows) {
+        // run_bridge.bat is: @echo off / "<node>" "%~dp0index.js" %*
+        fs::read_to_string(dir.join("run_bridge.bat")).ok().and_then(|s| {
+            s.lines()
+                .find(|l| l.trim_start().starts_with('"'))
+                .and_then(|l| l.split('"').nth(1).map(|p| p.to_string()))
+        })
+    } else {
+        // index.js's shebang was rewritten to the absolute node path at install.
+        fs::read_to_string(dir.join("index.js")).ok().and_then(|s| {
+            s.lines().next().and_then(|l| l.strip_prefix("#!").map(|p| p.trim().to_string()))
+        })
+    };
+
+    match recorded {
+        Some(p) if Path::new(&p).exists() => say!("[INFO] Host was using Node at: {p}"),
+        Some(p) => {
+            say!("[INFO] Host referenced Node at {p}, which no longer exists.");
+            say!("       That's fine — removal doesn't need Node.js.");
+        }
+        None => {}
+    }
 }
 
 // Record a failure and report it once, where it was found.
@@ -372,10 +411,12 @@ fn verify_removal(dir: &Path, manifest_file: &str, problems: &mut Vec<String>) {
 // --- Post-install verification ----------------------------------------------
 // Cheap, but it turns "the window flashed and I have no idea what happened"
 // into an explicit pass/fail list that also lands in the log file.
-fn verify(dir: &Path, host_path: &Path, node: &str) {
+// Returns the number of failed checks so the caller can refuse to report success
+// for an install that didn't actually come out right.
+fn verify(dir: &Path, host_path: &Path, node: &str) -> usize {
     say!("");
     say!("[CHECK] Verifying the installation");
-    let mut ok = true;
+    let mut failures = 0usize;
 
     // On Unix host_path *is* index.js, so skip the duplicate line.
     let mut expected = vec![dir.join("index.js"), dir.join(format!("{HOST_NAME}.json"))];
@@ -386,7 +427,7 @@ fn verify(dir: &Path, host_path: &Path, node: &str) {
         if f.exists() {
             say!("  [OK]   {}", f.display());
         } else {
-            ok = false;
+            failures += 1;
             warn!("  [FAIL] missing {}", f.display());
         }
     }
@@ -396,28 +437,29 @@ fn verify(dir: &Path, host_path: &Path, node: &str) {
             say!("  [OK]   node {} responds", String::from_utf8_lossy(&o.stdout).trim());
         }
         _ => {
-            ok = false;
+            failures += 1;
             warn!("  [FAIL] {node} did not run — the Node.js install looks broken");
         }
     }
 
     #[cfg(windows)]
     {
+        // Diagnostic only, deliberately NOT counted as a failure: register_windows()
+        // already aborts the install if `reg add` didn't succeed, so that is the
+        // authoritative signal. This read-back depends on parsing reg.exe output,
+        // which is the least certain code here — it must never be what turns a
+        // working install into a reported failure.
         let key = format!(r"HKCU\Software\Google\Chrome\NativeMessagingHosts\{HOST_NAME}");
         match reg_value(&key, None) {
             Some(v) => say!("  [OK]   registry -> {v}"),
-            None => {
-                ok = false;
-                warn!("  [FAIL] could not read back {key}");
-            }
+            None => warn!("  [WARN] could not read back {key} (the write itself succeeded)"),
         }
     }
 
-    if ok {
+    if failures == 0 {
         say!("[OK] All checks passed.");
-    } else {
-        warn!("[WARN] Some checks failed — see the lines marked [FAIL] above.");
     }
+    failures
 }
 
 // --- Browser registration (macOS / Linux) ---
@@ -608,18 +650,45 @@ fn home_dir() -> PathBuf {
 // --- Node detection ---
 fn find_node() -> Option<String> {
     // 1. Whatever the inherited PATH resolves to.
-    if let Some(p) = locate("node") {
+    if let Some(p) = locate("node").filter(|p| node_works(p)) {
         return Some(p);
     }
     // 2. Windows only: PATH as *persisted in the registry*. Explorer inherits a
     //    snapshot of the environment from sign-in, so a Node.js installed since
     //    then is invisible to `where` yet perfectly usable.
     #[cfg(windows)]
-    if let Some(p) = node_from_persisted_path() {
+    if let Some(p) = node_from_persisted_path().filter(|p| node_works(p)) {
         return Some(p);
     }
     // 3. Known install locations.
-    known_node_locations().into_iter().find(|c| Path::new(c).exists())
+    known_node_locations().into_iter().find(|c| Path::new(c).exists() && node_works(c))
+}
+
+// Every candidate is proved to execute before we commit to it. A stale version
+// manager directory or a broken shim otherwise produces an "installed" bridge
+// that fails inside the browser, which is far harder to diagnose.
+fn node_works(path: &str) -> bool {
+    Command::new(path)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+// A Node this installer downloaded on an earlier run. Consulted after the system
+// locations (a system Node is preferred, and on macOS it's the configuration
+// proven to work under Local Network Privacy) but before fetching another copy.
+fn private_node(dir: &Path) -> Option<String> {
+    if cfg!(windows) {
+        return None; // Windows installs Node via winget; no private copy is kept.
+    }
+    let p = dir.join("node").join("bin").join("node");
+    let s = p.to_string_lossy().into_owned();
+    if p.exists() && node_works(&s) {
+        Some(s)
+    } else {
+        None
+    }
 }
 
 // Resolve a command through the system locator (`where` / `which`).
@@ -696,10 +765,40 @@ fn known_node_locations() -> Vec<String> {
 
 #[cfg(not(windows))]
 fn known_node_locations() -> Vec<String> {
-    ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node", "/snap/bin/node"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect()
+    let mut v: Vec<String> =
+        ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node", "/snap/bin/node"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+    let home = home_dir();
+    v.push(home.join(".volta/bin/node").to_string_lossy().into_owned());
+
+    // Version managers, mirroring the Windows scan: a .pkg postinstall or a
+    // double-clicked .run never sources the user's shell profile, so an
+    // nvm/fnm-managed Node is real but completely absent from PATH. Without this
+    // we would download a private copy for a machine that already has Node.
+    let mut managed: Vec<String> = Vec::new();
+    for (sub, tail) in [
+        (".nvm/versions/node", "bin"),
+        (".local/share/fnm/node-versions", "installation/bin"),
+        (".fnm/node-versions", "installation/bin"),
+    ] {
+        if let Ok(entries) = fs::read_dir(home.join(sub)) {
+            for e in entries.flatten() {
+                let p = e.path().join(tail).join("node");
+                if p.exists() {
+                    managed.push(p.to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+    // Newest-looking first. Lexicographic isn't true semver ordering (v9 sorts
+    // above v10), but any working Node is acceptable and find_node() proves the
+    // one it picks actually runs.
+    managed.sort_by(|a, b| b.cmp(a));
+    v.extend(managed);
+    v
 }
 
 #[cfg(windows)]
@@ -753,14 +852,20 @@ fn expand_env(s: &str) -> String {
     out
 }
 
-// --- Automatic Node.js install (Windows) -------------------------------------
-// Restores what the old PowerShell installer did: if Node is missing, install it
-// with winget instead of dead-ending the user.
+// --- Automatic Node.js install -----------------------------------------------
+// If Node.js is missing, install it rather than dead-ending the user:
+//   Windows : winget (what the old PowerShell installer did)
+//   macOS   : Homebrew when present, else the official tarball
+//   Linux   : the official tarball
+// The tarball path is deliberately rootless — it unpacks into our own install
+// directory, so it never needs sudo and can't disturb a system/distro Node.
 #[cfg(windows)]
-fn install_node_automatically() -> Option<String> {
+fn install_node_automatically(_dir: &Path) -> Result<String, String> {
     if locate("winget").is_none() {
-        warn!("[WARN] winget is unavailable, so Node.js can't be installed automatically.");
-        return None;
+        return Err(format!(
+            "Node.js is missing and winget is unavailable, so it can't be installed automatically.\n  {}",
+            node_install_hint()
+        ));
     }
     say!("[INFO] Installing Node.js LTS with winget — this can take a few minutes.");
     say!("       Approve the Windows permission prompt if one appears.");
@@ -781,19 +886,262 @@ fn install_node_automatically() -> Option<String> {
         Ok(s) if s.success() => say!("[OK] winget reported Node.js as installed."),
         Ok(s) => warn!("[WARN] winget exited with {s} — checking for Node anyway."),
         Err(e) => {
-            warn!("[WARN] could not run winget: {e}");
-            return None;
+            return Err(format!("could not run winget: {e}\n  {}", node_install_hint()));
         }
     }
     // winget updates the *persisted* PATH; this process's copy is stale, so look
     // at the registry and the known locations rather than re-running `where`.
     node_from_persisted_path()
         .or_else(|| known_node_locations().into_iter().find(|c| Path::new(c).exists()))
+        .ok_or_else(|| {
+            format!(
+                "winget ran but Node.js still isn't detectable — a sign-out/in may be needed.\n  {}",
+                node_install_hint()
+            )
+        })
 }
 
-#[cfg(not(windows))]
-fn install_node_automatically() -> Option<String> {
+#[cfg(target_os = "macos")]
+fn install_node_automatically(dir: &Path) -> Result<String, String> {
+    // Homebrew first when available: /opt/homebrew/bin/node is the configuration
+    // this project is known to work with under macOS Local Network Privacy, and
+    // it leaves Node on PATH for everything else on the machine too.
+    if let Some(brew) = locate_brew() {
+        say!("[INFO] Installing Node.js with Homebrew ({brew}) — this can take a few minutes.");
+        match Command::new(&brew).args(["install", "node"]).status() {
+            Ok(s) if s.success() => {
+                say!("[OK] Homebrew reported Node.js as installed.");
+                if let Some(n) = find_node() {
+                    return Ok(n);
+                }
+                warn!("[WARN] Homebrew finished but Node still isn't visible — fetching a private copy.");
+            }
+            Ok(s) => warn!("[WARN] Homebrew exited with {s} — fetching a private copy instead."),
+            Err(e) => warn!("[WARN] could not run Homebrew ({e}) — fetching a private copy instead."),
+        }
+    } else {
+        say!("[INFO] Homebrew isn't installed — fetching Node.js from nodejs.org instead.");
+    }
+    install_node_from_tarball(dir, "darwin")
+}
+
+// Homebrew lives outside the minimal PATH a .pkg postinstall inherits, so check
+// both Apple-silicon and Intel prefixes explicitly.
+#[cfg(target_os = "macos")]
+fn locate_brew() -> Option<String> {
+    locate("brew").or_else(|| {
+        ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+            .iter()
+            .find(|p| Path::new(p).exists())
+            .map(|p| p.to_string())
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn install_node_automatically(dir: &Path) -> Result<String, String> {
+    // No package-manager path on purpose: apt/dnf/pacman all need root, and a
+    // sudo prompt from a double-clicked .run is a dead end. The official tarball
+    // needs no privileges at all.
+    say!("[INFO] Fetching Node.js from nodejs.org (no administrator rights needed).");
+    install_node_from_tarball(dir, "linux")
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+fn install_node_automatically(_dir: &Path) -> Result<String, String> {
+    Err(format!("automatic Node.js install isn't supported on this platform.\n  {}", node_install_hint()))
+}
+
+// --- Node.js from the official tarball ----------------------------------------
+// Unpacks into <install dir>/node, so the uninstaller's recursive delete removes
+// it along with everything else — no orphaned toolchain left behind.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn install_node_from_tarball(dir: &Path, os: &str) -> Result<String, String> {
+    const DIST: &str = "https://nodejs.org/dist";
+
+    let arch = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else if cfg!(target_arch = "x86_64") {
+        "x64"
+    } else {
+        return Err(format!("no official Node.js build exists for this CPU.\n  {}", node_install_hint()));
+    };
+
+    // Resolve the current LTS from index.json rather than pinning a version that
+    // would silently rot. (There is no /dist/latest-lts/ path — it 404s.)
+    say!("[INFO] Looking up the current Node.js LTS release...");
+    let index = fetch_text(&format!("{DIST}/index.json"))?;
+    let version = latest_lts_version(&index).ok_or_else(|| {
+        format!("could not determine the current Node.js LTS from nodejs.org.\n  {}", node_install_hint())
+    })?;
+    say!("[INFO] Current LTS is {version}");
+
+    let file = format!("node-{version}-{os}-{arch}.tar.gz");
+    let base = format!("{DIST}/{version}");
+
+    let staging = dir.join(".node-download");
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir_all(&staging).map_err(|e| format!("create {}: {e}", staging.display()))?;
+    let archive = staging.join(&file);
+
+    say!("[INFO] Downloading {file}");
+    let result = (|| -> Result<String, String> {
+        fetch_to_file(&format!("{base}/{file}"), &archive)?;
+        verify_sha256(&base, &file, &archive)?;
+
+        let status = Command::new("tar")
+            .arg("-xzf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(&staging)
+            .status()
+            .map_err(|e| format!("could not run tar: {e}"))?;
+        if !status.success() {
+            return Err(format!("tar failed to unpack {file}"));
+        }
+
+        // The archive contains a single node-vX.Y.Z-<os>-<arch>/ directory.
+        let unpacked = fs::read_dir(&staging)
+            .map_err(|e| format!("read {}: {e}", staging.display()))?
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.is_dir() && p.file_name().map(|n| n.to_string_lossy().starts_with("node-v")).unwrap_or(false))
+            .ok_or_else(|| "the downloaded archive did not contain a node-* directory".to_string())?;
+
+        let target = dir.join("node");
+        let _ = fs::remove_dir_all(&target);
+        fs::rename(&unpacked, &target)
+            .map_err(|e| format!("move {} -> {}: {e}", unpacked.display(), target.display()))?;
+
+        // Prove it runs before wiring anything up. The official builds are
+        // glibc-linked, so on a musl distro (Alpine) this is where we find out —
+        // better a clear message than a bridge that fails inside the browser.
+        let node = target.join("bin").join("node");
+        match Command::new(&node).arg("--version").output() {
+            Ok(o) if o.status.success() => {
+                say!("[OK] Installed Node {} into {}", String::from_utf8_lossy(&o.stdout).trim(), target.display());
+                Ok(node.to_string_lossy().into_owned())
+            }
+            _ => {
+                let _ = fs::remove_dir_all(&target);
+                Err(format!(
+                    "the downloaded Node.js build does not run on this system (musl-based distro?).\n  {}",
+                    node_install_hint()
+                ))
+            }
+        }
+    })();
+
+    let _ = fs::remove_dir_all(&staging);
+    result
+}
+
+// Newest LTS version out of https://nodejs.org/dist/index.json.
+//
+// index.json is a newest-first array of flat objects (its only array member,
+// "files", holds plain strings), so splitting on '{' yields one release per
+// chunk — enough to avoid pulling in a JSON dependency. An LTS release carries
+// its codename as a string ("lts":"Krypton"); a current release has "lts":false.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn latest_lts_version(index: &str) -> Option<String> {
+    for record in index.split('{') {
+        if !record.contains("\"lts\":\"") {
+            continue;
+        }
+        if let Some(v) = json_string_field(record, "version") {
+            // This goes into a URL, so accept only vN.N.N shapes.
+            let is_version = v.starts_with('v')
+                && v.len() <= 16
+                && v[1..].chars().all(|c| c.is_ascii_digit() || c == '.');
+            if is_version {
+                return Some(v);
+            }
+        }
+    }
     None
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn json_string_field(record: &str, key: &str) -> Option<String> {
+    let pat = format!("\"{key}\":\"");
+    let start = record.find(&pat)? + pat.len();
+    let rest = &record[start..];
+    let end = rest.find('"')?;
+    Some(rest[..end].to_string())
+}
+
+// We are about to execute what we download, so check it against the published
+// checksum. HTTPS to nodejs.org is the trust anchor; this catches truncated or
+// corrupted transfers rather than serving as a substitute for signature checks.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn verify_sha256(base: &str, file: &str, archive: &Path) -> Result<(), String> {
+    let sums = fetch_text(&format!("{base}/SHASUMS256.txt"))?;
+    let expected = sums
+        .lines()
+        .find(|l| l.split_whitespace().nth(1) == Some(file))
+        .and_then(|l| l.split_whitespace().next())
+        .ok_or_else(|| format!("nodejs.org published no checksum for {file}"))?;
+
+    let actual = sha256_of(archive)?;
+    if !actual.eq_ignore_ascii_case(expected) {
+        return Err(format!(
+            "checksum mismatch for {file} — refusing to use it\n  expected {expected}\n  actual   {actual}"
+        ));
+    }
+    say!("[OK] Checksum verified.");
+    Ok(())
+}
+
+// `shasum` ships with macOS; `sha256sum` comes with GNU coreutils on Linux.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn sha256_of(path: &Path) -> Result<String, String> {
+    // Invoke each tool directly instead of probing with `which` first: a slim
+    // image can easily ship sha256sum without shipping `which`, and gating on the
+    // probe would then refuse a download we are perfectly able to verify.
+    for (bin, args) in [("shasum", &["-a", "256"][..]), ("sha256sum", &[][..])] {
+        if let Ok(out) = Command::new(bin).args(args).arg(path).output() {
+            if out.status.success() {
+                if let Some(hash) = String::from_utf8_lossy(&out.stdout).split_whitespace().next() {
+                    return Ok(hash.to_string());
+                }
+            }
+        }
+    }
+    Err("no shasum/sha256sum available to verify the download".to_string())
+}
+
+// --- Downloading (curl, falling back to wget) --------------------------------
+// Both helpers try curl then wget, invoking each directly — a spawn error means
+// the tool isn't installed, a non-zero exit means the transfer itself failed. No
+// `which` probe, so a machine lacking `which` can still download.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn fetch_text(url: &str) -> Result<String, String> {
+    for (bin, args) in [
+        ("curl", &["-fsSL", "--proto", "=https", "--tlsv1.2"][..]),
+        ("wget", &["-qO-"][..]),
+    ] {
+        if let Ok(out) = Command::new(bin).args(args).arg(url).output() {
+            if out.status.success() {
+                return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+            }
+        }
+    }
+    Err(format!("could not fetch {url} (need curl or wget).\n  {}", node_install_hint()))
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn fetch_to_file(url: &str, to: &Path) -> Result<(), String> {
+    // Both spellings take the destination immediately before the URL.
+    for (bin, args) in [
+        ("curl", &["-fSL", "--proto", "=https", "--tlsv1.2", "-o"][..]),
+        ("wget", &["-O"][..]),
+    ] {
+        if let Ok(status) = Command::new(bin).args(args).arg(to).arg(url).status() {
+            if status.success() {
+                return Ok(());
+            }
+        }
+    }
+    Err(format!("could not download {url} (need curl or wget).\n  {}", node_install_hint()))
 }
 
 fn node_install_hint() -> &'static str {

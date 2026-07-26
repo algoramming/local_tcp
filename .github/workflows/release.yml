@@ -44,13 +44,27 @@ jobs:
         # Guard against silently regressing the crt-static setting: a build that
         # imports VCRUNTIME140.dll / api-ms-win-crt-*.dll dies on a clean Windows
         # box with a missing-DLL error, so fail the build here instead.
+        # Failure policy: fail ONLY on a genuine CRT import. If dumpbin can't be
+        # located, warn and move on — a guard that can't find its tool must not
+        # block the whole release. Falls back to a raw string scan of the binary,
+        # which is enough to spot a DLL import name.
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
           $bin = "${{ env.RUST_DIR }}/target/release/localtcp-installer.exe"
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -Last 1
-          $deps = & $dumpbin /dependents $bin | Out-String
-          Write-Host $deps
+          $deps = $null
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            $vs = & $vswhere -latest -property installationPath
+            $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" -ErrorAction SilentlyContinue |
+                       Select-Object -Last 1
+            if ($dumpbin) { $deps = & $dumpbin.FullName /dependents $bin | Out-String }
+          }
+          if (-not $deps) {
+            Write-Host "::warning::dumpbin not found — falling back to a string scan of the .exe."
+            $bytes = [IO.File]::ReadAllBytes($bin)
+            $deps = -join ($bytes | ForEach-Object { if ($_ -ge 32 -and $_ -lt 127) { [char]$_ } else { "`n" } })
+          }
           if ($deps -match 'VCRUNTIME|api-ms-win-crt') {
             throw "The installer .exe dynamically links the MSVC CRT — it will fail on clean Windows machines. Check installers/rust/.cargo/config.toml (+crt-static)."
           }
