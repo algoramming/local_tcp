@@ -4,7 +4,9 @@
 
 const RELEASE_BASE = 'https://github.com/algonize/local_tcp/releases/latest/download/';
 // Full single-page documentation (features, architecture, protocol, install/uninstall guides).
-const DOCS_URL = 'https://algonize.github.io/local_tcp/';
+// index.html is bundled INSIDE the extension, so it opens from the extension's own
+// origin (chrome-extension://<id>/index.html) — offline, no CDN, always version-matched.
+const DOCS_URL = chrome.runtime.getURL('index.html');
 const INSTALLER_ASSETS = {
   win: 'localtcp-windows-installer.exe',
   mac: 'localtcp-mac-installer.pkg',
