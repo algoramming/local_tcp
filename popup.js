@@ -2,7 +2,7 @@
 // Handles configuration, UI states, bridge status, and the security allowlist.
 // The Setup Kit button downloads a one-click installer from GitHub Releases.
 
-const RELEASE_BASE = 'https://github.com/algonize/local_tcp/releases/latest/download/';
+const RELEASE_BASE = 'https://github.com/algoramming/local_tcp/releases/latest/download/';
 // Full single-page documentation (features, architecture, protocol, install/uninstall guides).
 // index.html is bundled INSIDE the extension, so it opens from the extension's own
 // origin (chrome-extension://<id>/index.html) — offline, no CDN, always version-matched.
