@@ -3,6 +3,8 @@
 // The Setup Kit button downloads a one-click installer from GitHub Releases.
 
 const RELEASE_BASE = 'https://github.com/algonize/local_tcp/releases/latest/download/';
+// Full single-page documentation (features, architecture, protocol, install/uninstall guides).
+const DOCS_URL = 'https://algonize.github.io/local_tcp/';
 const INSTALLER_ASSETS = {
   win: 'localtcp-windows-installer.exe',
   mac: 'localtcp-mac-installer.pkg',
@@ -49,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const resetConfigBtn = document.getElementById('resetConfigBtn');
   const clearLogsBtn = document.getElementById('clearLogsBtn');
   const logBox = document.getElementById('logBox');
-  const removeExtBtn = document.getElementById('removeExtBtn');
+  const docsBtn = document.getElementById('docsBtn');
 
   // 1. Check Bridge Status
   async function checkBridge() {
@@ -239,20 +241,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   downloadBtn.addEventListener('click', downloadInstaller);
 
+  // Open the full documentation site in a new tab.
+  if (docsBtn) docsBtn.addEventListener('click', () => chrome.tabs.create({ url: DOCS_URL }));
+
   // ─── Uninstall ───────────────────────────────────────────────────────────────
   if (uninstallBtn) uninstallBtn.addEventListener('click', downloadUninstaller);
-
-  if (removeExtBtn) {
-    removeExtBtn.addEventListener('click', () => {
-      // One-click self-removal — Chrome shows a native confirm dialog. No
-      // "management" permission is required for uninstallSelf.
-      if (chrome.management && chrome.management.uninstallSelf) {
-        chrome.management.uninstallSelf({ showConfirmDialog: true });
-      } else {
-        addLog('Open chrome://extensions to remove the extension.', 'info');
-      }
-    });
-  }
 
   clearLogsBtn.addEventListener('click', () => {
     logBox.innerHTML = '';

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Local TCP",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr75tOYd/Z13XY32r4XJVdQucK0SYCDUTso8YoqS8BAkdgnW+waaa4zdnzMw9nqTXbPKGRaxebHajqw76e4gZswPUShEbEBNwm9DmMH9MlaKEmMrL0pLpuDVw+S6s27ECT7dYzJthNdMULjOJOaEADhm+LGxnyzGYZgIiX+JsJBk/Ka8y1TFkonW7UGXbKxtAIJADxyz5bj4FVqrKnjRr280eiGFB4t3Sa/oRY8YSMwhKE0/4MMoxFDD/Sj26QV8fe6uU7gSbgAIOE2Gvb8bqHE8cbMuDv4t422FN4ojDn2jyFigCUEYKLdQg1hzA/XVZcaeBg0brVVd9C+KNN+2iVQIDAQAB",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Your browser can finally talk with local TCP.",
   "permissions": [
     "storage",
