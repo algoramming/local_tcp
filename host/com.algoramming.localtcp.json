@@ -1,6 +1,6 @@
 {
   "name": "com.algoramming.localtcp",
-  "description": "Your browser can finally talk with local TCP.",
+  "description": "Your browser can finally talk with local TCP and USB printers.",
   "path": "HOST_PATH",
   "type": "stdio",
   "allowed_origins": [

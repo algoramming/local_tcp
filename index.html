@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Local TCP Bridge Documentation · Algoramming Systems Ltd.</title>
-<meta name="description" content="Local TCP Bridge is the missing link between web browsers and local TCP hardware. A Native Messaging bridge for ESC/POS thermal printers, by Algoramming Systems Ltd." />
+<meta name="description" content="Local TCP Bridge is the missing link between web browsers and local hardware. A Native Messaging bridge for ESC/POS thermal printers over the network and USB, by Algoramming Systems Ltd." />
 <link rel="icon" type="image/png" href="icons/icon128.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -459,12 +459,13 @@
   <div class="wrap nav-inner">
     <a class="nav-brand" href="#top">
       <img class="nav-logo" src="icons/icon128.png" alt="Local TCP" />
-      Local&nbsp;TCP<span class="tag" data-version>v2.1.1</span>
+      Local&nbsp;TCP<span class="tag" data-version>v2.1.2</span>
     </a>
     <div class="nav-links">
       <a href="#overview">Overview</a>
       <a href="#architecture">Architecture</a>
       <a href="#quickstart">Quick Start</a>
+      <a href="#usb">USB</a>
       <a href="#protocol">Protocol</a>
       <a href="#install">Install</a>
       <a class="nav-cta" href="https://chromewebstore.google.com/detail/local-tcp/ngbakchodnmhndnghhejmocfadjfekkf" target="_blank" rel="noopener">Add to Chrome</a>
@@ -483,8 +484,8 @@
       <span class="pill">Native Bridge</span>
       Chrome · Edge · Brave · Chromium
     </span>
-    <h1 class="reveal in" data-d="1">Your browser can finally<br><span class="grad">talk to local TCP.</span></h1>
-    <p class="hero-sub reveal in" data-d="2">Local&nbsp;TCP&nbsp;Bridge is a Native Messaging host that lets web apps stream raw bytes straight to local hardware, like ESC/POS thermal printers, over a secure, millisecond-latency binary protocol. No cloud hop, no print server.</p>
+    <h1 class="reveal in" data-d="1">Your browser can finally<br><span class="grad">talk to local TCP &amp; USB.</span></h1>
+    <p class="hero-sub reveal in" data-d="2">Local&nbsp;TCP&nbsp;Bridge is a Native Messaging host that lets web apps stream raw bytes straight to local hardware, like ESC/POS thermal printers on your network or plugged in by USB, over a secure, millisecond-latency binary protocol. No cloud hop, no print server.</p>
     <div class="hero-cta reveal in" data-d="3">
       <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/local-tcp/ngbakchodnmhndnghhejmocfadjfekkf" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
@@ -498,6 +499,7 @@
     <div class="hero-meta reveal in" data-d="3">
       <span><i class="dot-good"></i> <b>One-click</b> installers</span>
       <span><b>MV3</b> · Native Messaging</span>
+      <span><b>Network</b> &amp; <b>USB</b> printers</span>
       <span>Auto-installs <b>Node.js</b></span>
       <span>MIT Licensed</span>
     </div>
@@ -532,7 +534,7 @@
         <div class="node is-printer">
           <div class="node-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>
           <span class="nm">Printer</span>
-          <span class="sub">TCP :9100</span>
+          <span class="sub">TCP :9100 · USB</span>
         </div>
       </div>
     </div>
@@ -545,7 +547,7 @@
     <div class="sec-head center reveal">
       <span class="eyebrow">What it is</span>
       <h2>The missing link between web&nbsp;browsers and local&nbsp;hardware</h2>
-      <p>Browsers deliberately can't open raw TCP sockets. Local&nbsp;TCP brings that capability back, safely, by pairing a lightweight Chrome extension with a tiny Node.js native host that does the socket work on your machine.</p>
+      <p>Browsers deliberately can't open raw TCP sockets, and can't reach most USB printers either. Local&nbsp;TCP brings that capability back, safely, by pairing a lightweight Chrome extension with a tiny Node.js native host that does the hardware work on your machine.</p>
     </div>
 
     <div class="feat-grid">
@@ -562,7 +564,7 @@
       <div class="feat reveal" data-d="3">
         <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><polyline points="6 3 6 9 2 12 6 15 6 21"/><polyline points="18 3 18 9 22 12 18 15 18 21"/></svg></div>
         <h3>Binary performance</h3>
-        <p>Streams raw ESC/POS bytes with millisecond precision. Concurrent jobs are correlated by <code>reqId</code> and serialized per socket, so byte streams never interleave.</p>
+        <p>Streams raw ESC/POS bytes with millisecond precision, over the network or USB. Concurrent jobs are correlated by <code>reqId</code> and serialized per printer, so byte streams never interleave.</p>
       </div>
       <div class="feat reveal" data-d="1">
         <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20z"/></svg></div>
@@ -619,7 +621,7 @@
           <div class="num">4</div>
           <div>
             <h4>Native Host (Node.js)</h4>
-            <p>Opens a raw TCP socket to your hardware on port <code>9100</code>, writes the bytes, and echoes the <code>reqId</code> back so concurrent jobs never cross wires.</p>
+            <p>Opens a raw TCP socket to your hardware on port <code>9100</code>, or writes straight to a USB printer, then echoes the <code>reqId</code> back so concurrent jobs never cross wires.</p>
           </div>
         </div>
       </div>
@@ -643,7 +645,7 @@
         <div class="avz-conn"><svg width="24" height="26" viewBox="0 0 24 26"><path d="M12 0 V26" class="wire-live"/><circle r="2.6" class="packet" cx="12" cy="0"><animate attributeName="cy" from="0" to="26" dur="1.5s" begin="0.8s" repeatCount="indefinite"/></circle></svg></div>
         <div class="avz-row">
           <div class="avz-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>
-          <div class="avz-txt"><div class="n">Thermal printer</div><div class="d">raw TCP socket · :9100</div></div>
+          <div class="avz-txt"><div class="n">Thermal printer</div><div class="d">raw TCP socket · :9100 · or USB</div></div>
         </div>
       </div>
     </div>
@@ -783,8 +785,77 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
   </div>
 </section>
 
+<!-- ══ USB PRINTERS ═════════════════════════════════════════════ -->
+<section class="band band-alt" id="usb">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">New in v2.1.2</span>
+      <h2>USB printers, too</h2>
+      <p>The bridge also prints to USB receipt printers, including the ones a browser can't reach on its own. Standard USB printers need <strong>no printer driver</strong>: the bridge uses the USB printer support already built into the operating system.</p>
+    </div>
+
+    <div class="two-col">
+      <div class="reveal" data-d="1">
+        <h3 style="font-size:18px;margin-bottom:6px;">Where it works</h3>
+        <p style="color:var(--muted);font-size:14.5px;margin-bottom:16px;">Printers are listed in two groups: <strong>connected by USB</strong> (the bridge writes to the printer directly) and <strong>installed printers</strong> (the operating system's print queue, with the bytes passed through untouched).</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>System</th><th>How the bridge prints</th><th>One-time setup</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Windows</strong></td><td>Straight to Windows' built-in USB printer driver, or through any installed Windows printer</td><td class="yes">None</td></tr>
+              <tr><td><strong>Linux</strong></td><td>Straight to <code>/dev/usb/lp*</code>, or through CUPS printers</td><td>The installer asks for your password once to allow USB printer access</td></tr>
+              <tr><td><strong>macOS</strong></td><td>Through printers added in System Settings → Printers &amp; Scanners</td><td>Add the printer there once</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ol class="guide-steps" style="margin-top:26px;">
+          <li><div><h4>Connect the printer</h4><p>Plug it in with USB and switch it on.</p></div></li>
+          <li><div><h4>Open the USB tab</h4><p>In the extension popup, switch to <strong>USB</strong>. Your printers are listed; press the refresh button after plugging one in.</p></div></li>
+          <li><div><h4>Print a test page</h4><p>Press <strong>Test print</strong>. Optionally press <strong>Set as default</strong>: web apps that print without naming a printer use the default one.</p></div></li>
+        </ol>
+      </div>
+      <div class="reveal" data-d="2">
+        <h3 style="font-size:18px;margin-bottom:6px;">List and print from JavaScript</h3>
+        <p style="color:var(--muted);font-size:14.5px;margin-bottom:16px;">Same client, two new actions. Save the printer's <code style="font-family:var(--font-mono);font-size:12px;color:var(--pine)">id</code> together with its USB ids: if the printer moves to another USB port, <code style="font-family:var(--font-mono);font-size:12px;color:var(--pine)">match</code> lets the bridge find it again.</p>
+        <div class="code">
+          <div class="code-bar"><span class="fn"><span class="lang">JS</span> usb-receipt.js</span><span class="code-dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span></div>
+<pre><code><span class="tok-k">const</span> bridge = <span class="tok-k">new</span> <span class="tok-f">LocalTcp</span>();
+
+<span class="tok-c">// 1 · USB needs bridge v2.1.1+ (it reports features)</span>
+<span class="tok-k">const</span> info = <span class="tok-k">await</span> bridge.<span class="tok-f">checkBridge</span>();
+<span class="tok-k">if</span> (!(info.features || []).<span class="tok-f">includes</span>(<span class="tok-s">'usb'</span>))
+  <span class="tok-k">return</span> <span class="tok-f">alert</span>(<span class="tok-s">'Please update Local TCP.'</span>);
+
+<span class="tok-c">// 2 · find the printers the bridge can reach</span>
+<span class="tok-k">const</span> list = <span class="tok-k">await</span> bridge.<span class="tok-f">_send</span>({ action: <span class="tok-s">'USB_LIST'</span> });
+<span class="tok-k">const</span> p = list.printers[<span class="tok-n">0</span>]; <span class="tok-c">// { id, kind, name, … }</span>
+
+<span class="tok-c">// 3 · print ESC/POS bytes, base64 keeps receipts small</span>
+<span class="tok-k">const</span> res = <span class="tok-k">await</span> bridge.<span class="tok-f">_send</span>({
+  action: <span class="tok-s">'USB_PRINT'</span>,
+  printerId: p.id,
+  match: { vendorId: p.vendorId, productId: p.productId,
+           serialNumber: p.serialNumber },
+  dataB64: <span class="tok-f">btoa</span>(<span class="tok-f">String</span>.<span class="tok-f">fromCharCode</span>(...bytes)),
+});
+<span class="tok-k">if</span> (!res.success) console.<span class="tok-f">error</span>(res.code, res.error);</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2h6c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>
+      <div>On <strong>macOS</strong>, Chrome and Edge can also reach USB printers directly (WebUSB), so a web app can print there without the bridge. On <strong>Windows</strong> and <strong>Linux</strong> the operating system keeps USB printers for itself, which is exactly the gap the bridge fills.</div>
+    </div>
+    <div class="callout warn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div>A few printers (for example some older Epson TM models) use a <strong>vendor-specific</strong> USB mode that Windows doesn't drive on its own: install the maker's driver, then pick the printer under <strong>Installed Windows printers</strong>. Printers that show up as a <strong>COM port</strong> are serial devices, not USB printers, to the bridge.</div>
+    </div>
+  </div>
+</section>
+
 <!-- ══ PROTOCOL ═════════════════════════════════════════════════ -->
-<section class="band band-alt" id="protocol">
+<section class="band" id="protocol">
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="eyebrow">Reference</span>
@@ -806,6 +877,10 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
               <tr><td><code>port</code></td><td>number</td><td>default <code>9100</code></td></tr>
               <tr><td><code>data</code></td><td>number[]</td><td>ESC/POS bytes, a <span class="req">plain array</span></td></tr>
               <tr><td><code>readTimeoutMs</code></td><td>number</td><td>optional; wait for a device reply</td></tr>
+              <tr><td><code>printerId</code></td><td>string</td><td>USB: an <code>id</code> from <code>USB_LIST</code>; omit to use the popup's default</td></tr>
+              <tr><td><code>match</code></td><td>object</td><td>USB, optional: <code>{ vendorId, productId, serialNumber }</code></td></tr>
+              <tr><td><code>dataB64</code></td><td>string</td><td>USB: the bytes as base64 (smaller than <code>data</code>)</td></tr>
+              <tr><td><code>timeoutMs</code></td><td>number</td><td>USB, optional: write timeout, default <code>20000</code></td></tr>
             </tbody>
           </table>
         </div>
@@ -821,6 +896,9 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
               <tr><td><code>version</code></td><td>string</td><td>installed host version</td></tr>
               <tr><td><code>bytesSent</code></td><td>number</td><td><code>PRINT</code> / <code>SEND</code></td></tr>
               <tr><td><code>data</code></td><td>number[]</td><td>bytes read back on <code>readTimeoutMs</code></td></tr>
+              <tr><td><code>features</code></td><td>string[]</td><td><code>CHECK_BRIDGE</code>: e.g. <code>["tcp","usb"]</code></td></tr>
+              <tr><td><code>printers</code></td><td>object[]</td><td><code>USB_LIST</code>: id, kind, name, vendorId, …</td></tr>
+              <tr><td><code>code</code></td><td>string</td><td>USB failures: <code>notFound</code>, <code>busy</code>, <code>timeout</code>, …</td></tr>
               <tr><td><code>error</code></td><td>string</td><td>present on failure</td></tr>
             </tbody>
           </table>
@@ -828,14 +906,14 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
       </div>
     </div>
     <div class="action-chips reveal">
-      <code>CHECK_BRIDGE</code><code>CONNECT</code><code>PRINT</code><code>SEND</code><code>DISCONNECT</code><code>PING</code>
+      <code>CHECK_BRIDGE</code><code>CONNECT</code><code>PRINT</code><code>SEND</code><code>DISCONNECT</code><code>USB_LIST</code><code>USB_PRINT</code><code>PING</code>
     </div>
-    <p style="margin-top:18px;color:var(--muted);font-size:13.5px;">A high-level alias is also accepted: <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">{ type: "LOCAL_TCP_PRINT", payload: { host, port, bytes, readTimeoutMs } }</code>, where <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">bytes</code> maps to <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">data</code>. Concurrent jobs to the same printer are serialized so byte streams never interleave.</p>
+    <p style="margin-top:18px;color:var(--muted);font-size:13.5px;">A high-level alias is also accepted: <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">{ type: "LOCAL_TCP_PRINT", payload: { host, port, bytes, readTimeoutMs } }</code>, where <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">bytes</code> maps to <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">data</code>. Concurrent jobs to the same printer are serialized so byte streams never interleave. USB failures also carry a stable <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">code</code>: <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">notFound</code>, <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">busy</code>, <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">permissionDenied</code>, <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">timeout</code>, <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">ioError</code>, <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">noPrinter</code> or <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--pine)">bridgeOutdated</code>.</p>
   </div>
 </section>
 
 <!-- ══ INSTALLATION ═════════════════════════════════════════════ -->
-<section class="band" id="install">
+<section class="band band-alt" id="install">
   <div class="wrap">
     <div class="sec-head center reveal">
       <span class="eyebrow">Installation guide</span>
@@ -872,7 +950,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
           <li><div><h4>Add the extension</h4><p>Install Local TCP from the Chrome Web Store. On first install it opens a setup tab and starts your download automatically.</p></div></li>
           <li><div><h4>Open the installer</h4><p>Double-click <span class="kbd">localtcp-mac-installer.pkg</span> → <strong>Continue</strong> → <strong>Install</strong>. macOS prompts for your password, then the host installs for your user account.</p></div></li>
           <li><div><h4>Restart Chrome</h4><p>Quit Chrome completely and reopen it. The popup flips to <strong>Bridge Linked</strong> on its own, with no manual re-check.</p></div></li>
-          <li><div><h4>Test the connection</h4><p>Open the popup, enter your printer's <strong>IP</strong> and <strong>port</strong> (usually <span class="kbd">9100</span>), and hit <strong>Test Connection</strong>.</p></div></li>
+          <li><div><h4>Test the connection</h4><p>Open the popup, enter your printer's <strong>IP</strong> and <strong>port</strong> (usually <span class="kbd">9100</span>), and hit <strong>Test Connection</strong>. For a USB printer added in System Settings, switch to the <strong>USB</strong> tab and press <strong>Test print</strong>.</p></div></li>
         </ol>
         <div class="callout tip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -894,13 +972,13 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
           <li><div><h4>Add the extension</h4><p>Install Local TCP from the Chrome Web Store, then download the installer from the popup's <strong>Download Setup Kit</strong> button.</p></div></li>
           <li><div><h4>Run the installer</h4><p>Double-click <span class="kbd">localtcp-windows-installer.exe</span> → <strong>Install</strong>. No admin rights needed; it installs per-user.</p></div></li>
           <li><div><h4>Restart Chrome</h4><p>Close every Chrome window and reopen. The popup shows <strong>Bridge Linked</strong> automatically.</p></div></li>
-          <li><div><h4>Test the connection</h4><p>Enter the printer <strong>IP</strong> and <strong>port</strong> in the popup and click <strong>Test Connection</strong>.</p></div></li>
+          <li><div><h4>Test the connection</h4><p>Enter the printer <strong>IP</strong> and <strong>port</strong> in the popup and click <strong>Test Connection</strong>. For a USB printer, switch to the <strong>USB</strong> tab and press <strong>Test print</strong>; no printer driver is needed.</p></div></li>
         </ol>
         <div class="callout warn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <div>The installer is unsigned, so <strong>SmartScreen</strong> may warn you. Click <strong>More info → Run anyway</strong> to proceed. Node.js is auto-installed via winget if it's missing.</div>
         </div>
-        <p class="path-note"><b>Installed to:</b> <span>%APPDATA%\Algoramming\LocalTCP\run_bridge.bat</span> · registered under <span>HKCU</span> registry keys</p>
+        <p class="path-note"><b>Installed to:</b> <span>%APPDATA%\Algoramming\LocalTCP\run_bridge.bat</span> (plus <span>usb_windows.ps1</span>, the USB printer helper) · registered under <span>HKCU</span> registry keys</p>
       </div>
 
       <!-- Linux install -->
@@ -919,20 +997,20 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
 <span class="tok-f">./localtcp-linux-installer.run</span></code></pre></div>
           </div></li>
           <li><div><h4>Restart the browser</h4><p>Fully quit Chrome/Chromium/Brave and reopen. The popup reports <strong>Bridge Linked</strong>.</p></div></li>
-          <li><div><h4>Test the connection</h4><p>Set the printer <strong>IP</strong>/<strong>port</strong> in the popup and press <strong>Test Connection</strong>.</p></div></li>
+          <li><div><h4>Test the connection</h4><p>Set the printer <strong>IP</strong>/<strong>port</strong> in the popup and press <strong>Test Connection</strong>. For a USB printer, switch to the <strong>USB</strong> tab and press <strong>Test print</strong>.</p></div></li>
         </ol>
         <div class="callout tip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          <div>Node.js is auto-installed via your system package manager if it's missing. Covers Chrome, Chromium, Edge &amp; Brave.</div>
+          <div>Node.js is auto-installed if it's missing. Covers Chrome, Chromium, Edge &amp; Brave. The same installer also sets up <strong>USB printers</strong>: it asks for your password once (in the terminal, or in your desktop's password dialog) to add a small udev rule that lets you use them. Network printing works even if you cancel it.</div>
         </div>
-        <p class="path-note"><b>Installed to:</b> <span>~/.local/lib/algoramming/localtcp/index.js</span> · manifest registered in each browser's <span>NativeMessagingHosts/</span></p>
+        <p class="path-note"><b>Installed to:</b> <span>~/.local/lib/algoramming/localtcp/index.js</span> · manifest registered in each browser's <span>NativeMessagingHosts/</span> · USB access rule <span>/etc/udev/rules.d/70-localtcp-usb-printers.rules</span></p>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ══ UNINSTALLATION ═══════════════════════════════════════════ -->
-<section class="band band-alt" id="uninstall">
+<section class="band" id="uninstall">
   <div class="wrap">
     <div class="sec-head center reveal">
       <span class="eyebrow">Uninstallation guide</span>
@@ -983,7 +1061,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
         </div>
         <ol class="guide-steps">
           <li><div><h4>Three ways to remove</h4><p>Run <span class="kbd">localtcp-windows-uninstaller.exe</span>, <em>or</em> Start Menu → <strong>Uninstall Local TCP Bridge</strong>, <em>or</em> Settings → <strong>Apps</strong> → Local TCP → Uninstall.</p></div></li>
-          <li><div><h4>Confirm</h4><p>The uninstaller removes the host files and clears the <span class="kbd">HKCU</span> registry keys for every browser.</p></div></li>
+          <li><div><h4>Confirm</h4><p>The uninstaller stops the USB printer helper if it is running, removes the host files and clears the <span class="kbd">HKCU</span> registry keys for every browser.</p></div></li>
           <li><div><h4>Remove the extension <em>(optional)</em></h4><p>Use <strong>Remove Extension</strong> in the popup, or <span class="kbd">chrome://extensions</span>.</p></div></li>
         </ol>
       </div>
@@ -1002,6 +1080,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
           <li><div><h4>Make it executable &amp; run</h4>
             <div class="code" style="margin-top:10px;"><pre style="padding:14px 18px;"><code><span class="tok-f">chmod</span> +x localtcp-linux-uninstaller.run
 <span class="tok-f">./localtcp-linux-uninstaller.run</span></code></pre></div>
+            <p style="margin-top:10px;">It also removes the USB printer access rule, so it may ask for your password.</p>
           </div></li>
           <li><div><h4>Remove the extension <em>(optional)</em></h4><p>Click <strong>Remove Extension</strong> in the popup, or open <span class="kbd">chrome://extensions</span>.</p></div></li>
         </ol>
@@ -1011,7 +1090,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
 </section>
 
 <!-- ══ ABOUT / COMPANY ══════════════════════════════════════════ -->
-<section class="band" id="about">
+<section class="band band-alt" id="about">
   <div class="wrap">
     <div class="about-card reveal">
       <div class="about-body">
@@ -1021,7 +1100,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
         </div>
         <p>Local&nbsp;TCP&nbsp;Bridge is built and maintained by <strong>Algoramming Systems&nbsp;Ltd.</strong>, a software house that specialises in connecting modern web applications with the physical hardware that runs real businesses: point-of-sale, thermal printing, and networked devices.</p>
         <div class="about-stats">
-          <div class="s"><b data-version>v2.1.1</b><span>Current release</span></div>
+          <div class="s"><b data-version>v2.1.2</b><span>Current release</span></div>
           <div class="s"><b>5+</b><span>Browsers supported</span></div>
           <div class="s"><b>MIT</b><span>Open-source license</span></div>
         </div>
@@ -1036,7 +1115,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
 </section>
 
 <!-- ══ BUILT FOR ALGONIZE ═══════════════════════════════════════ -->
-<section class="band band-alt" id="built-for">
+<section class="band" id="built-for">
   <div class="wrap">
     <div class="bf reveal">
       <span class="eyebrow">The inspiration</span>
@@ -1060,13 +1139,14 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
     <div class="foot-grid">
       <div class="foot-brand">
         <div class="fb"><img src="icons/icon128.png" alt="Local TCP" /><span class="fn">Local TCP Bridge</span></div>
-        <p>The Native Messaging bridge that lets your browser stream raw bytes to local TCP hardware, securely and with millisecond latency.</p>
+        <p>The Native Messaging bridge that lets your browser stream raw bytes to local network and USB hardware, securely and with millisecond latency.</p>
       </div>
       <div class="foot-col">
         <h5>Documentation</h5>
         <a href="#overview">Overview</a>
         <a href="#architecture">Architecture</a>
         <a href="#quickstart">Quick Start</a>
+        <a href="#usb">USB Printers</a>
         <a href="#protocol">Protocol Reference</a>
       </div>
       <div class="foot-col">
@@ -1084,7 +1164,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
     </div>
     <div class="foot-bottom">
       <span>© 2026 Algoramming Systems Ltd. · MIT License · Distributed for professional hardware integration globally.</span>
-      <div class="badges"><span>Manifest V3</span><span>Native Messaging</span><span data-version>v2.1.1</span></div>
+      <div class="badges"><span>Manifest V3</span><span>Native Messaging</span><span data-version>v2.1.2</span></div>
     </div>
   </div>
 </footer>

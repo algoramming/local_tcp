@@ -271,6 +271,202 @@
     .spinner { animation: spin 1s linear infinite; display: none; }
     .btn.loading .spinner { display: inline-block; }
     .btn.loading .btn-text { display: none; }
+
+    [hidden] { display: none !important; }
+    .log-msg.warning { color: #fbbf24; }
+
+    /* Network | USB switch */
+    .segmented {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      margin-bottom: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .seg-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 10px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-dim);
+      font: 600 13px 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .seg-btn svg { width: 15px; height: 15px; }
+    .seg-btn:hover { color: var(--text-main); }
+    .seg-btn.active { background: var(--accent-primary); color: var(--bg-dark); box-shadow: 0 0 14px var(--accent-glow); }
+    .seg-count {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      font-size: 10.5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.25);
+    }
+    .seg-btn:not(.active) .seg-count { background: rgba(93, 192, 149, 0.15); color: var(--accent-primary); }
+
+    .pane { display: none; }
+    .pane.active { display: block; animation: slideUp 0.25s ease-out; }
+
+    /* USB printers */
+    .usb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .usb-head .card-title { margin-bottom: 0; }
+    .icon-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-dim);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .icon-btn:hover:not(:disabled) { color: var(--accent-primary); border-color: rgba(93, 192, 149, 0.4); }
+    .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .icon-btn svg { width: 15px; height: 15px; }
+    .icon-btn.spinning svg { animation: spin 1s linear infinite; }
+
+    .usb-group {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 14px 0 8px;
+    }
+    .usb-group:first-child { margin-top: 0; }
+    .usb-row {
+      padding: 12px;
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.45);
+      transition: border-color 0.2s;
+    }
+    .usb-row.is-default { border-color: rgba(93, 192, 149, 0.55); }
+    .usb-top { display: flex; gap: 12px; }
+    .usb-id { white-space: nowrap; }
+    .usb-ico {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      border-radius: 9px;
+      background: rgba(93, 192, 149, 0.1);
+      color: var(--accent-primary);
+      display: grid;
+      place-items: center;
+    }
+    .usb-ico svg { width: 18px; height: 18px; }
+    .usb-main { flex: 1; min-width: 0; }
+    .usb-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      word-break: break-word;
+    }
+    .usb-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; word-break: break-word; }
+    .chip {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 20px;
+      border: 1px solid;
+    }
+    .chip-default { color: var(--accent-primary); border-color: rgba(93, 192, 149, 0.45); background: rgba(93, 192, 149, 0.1); }
+    .chip-warn { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.08); }
+    .chip-error { color: var(--error); border-color: rgba(251, 113, 133, 0.4); background: rgba(251, 113, 133, 0.08); }
+    .usb-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--border); }
+    .mini-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(93, 192, 149, 0.45);
+      background: rgba(93, 192, 149, 0.12);
+      color: var(--accent-primary);
+      font: 600 11.5px 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mini-btn:hover:not(:disabled) { background: rgba(93, 192, 149, 0.2); }
+    .mini-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .mini-btn.ghost:hover:not(:disabled) { color: var(--text-main); background: rgba(255, 255, 255, 0.05); }
+    .mini-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .mini-btn svg { width: 12px; height: 12px; }
+    .mini-btn.loading .spinner { display: inline-block; }
+    .mini-btn.loading svg:not(.spinner) { display: none; }
+    .usb-result { font-size: 11px; line-height: 1.45; margin-top: 8px; }
+    .usb-result.success { color: var(--success); }
+    .usb-result.error { color: var(--error); }
+
+    .notice {
+      display: flex;
+      gap: 9px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid;
+      border-radius: 10px;
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+    .notice > svg { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 1px; }
+    .notice.info { background: rgba(56, 189, 248, 0.07); border-color: rgba(56, 189, 248, 0.25); color: #bae6fd; }
+    .notice.warn { background: rgba(251, 191, 36, 0.07); border-color: rgba(251, 191, 36, 0.3); color: #fde68a; }
+    .notice.error { background: rgba(251, 113, 133, 0.08); border-color: rgba(251, 113, 133, 0.35); color: #fecdd3; }
+    .notice-body { flex: 1; min-width: 0; }
+    .notice-body b { color: var(--text-main); }
+    .notice .mini-btn { margin-top: 8px; }
+    .cmd {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 5px 5px 5px 10px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .cmd code { flex: 1; font-family: 'Monaco', monospace; font-size: 10.5px; color: var(--text-main); overflow-x: auto; white-space: nowrap; }
+    .cmd .mini-btn { margin-top: 0; padding: 4px 8px; }
+
+    .usb-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 18px 8px 8px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-dim);
+    }
+    .usb-empty svg { width: 30px; height: 30px; color: #475569; margin-bottom: 4px; }
+    .usb-empty b { color: var(--text-main); font-size: 13px; }
+    .usb-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 18px 0; font-size: 12px; color: var(--text-dim); }
+    .usb-loading svg { width: 15px; height: 15px; animation: spin 1s linear infinite; }
+    .link-btn { background: none; border: none; padding: 4px 0; color: var(--accent-primary); font: 500 11.5px 'Inter', sans-serif; cursor: pointer; }
+    .link-btn:hover { text-decoration: underline; }
+    .usb-foot { font-size: 11px; color: var(--text-dim); margin: 10px 0 0; text-align: center; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -314,6 +510,20 @@
 
     <!-- DASHBOARD STATE -->
     <div class="state" id="dashboardState">
+      <div class="segmented" role="tablist" aria-label="Printer connection">
+        <button class="seg-btn active" id="tabNetwork" role="tab" data-pane="network" aria-selected="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+          Network
+        </button>
+        <button class="seg-btn" id="tabUsb" role="tab" data-pane="usb" aria-selected="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="1"></circle><circle cx="4" cy="20" r="1"></circle><path d="M4.7 19.3 19 5"></path><path d="m21 3-3 1 2 2Z"></path><path d="M9.26 7.68 5 12l2 5"></path><path d="m10 14 5 2 3.5-3.5"></path><path d="m18 12 1-1 1 1-1 1Z"></path></svg>
+          USB
+          <span class="seg-count" id="usbCount" hidden></span>
+        </button>
+      </div>
+
+      <!-- Network printers -->
+      <div class="pane active" data-pane="network">
       <div class="card">
         <div class="activity-header">
           <div class="card-title">Network Hub</div>
@@ -340,6 +550,31 @@
         </div>
         <div class="centered-action">
           <button class="tiny-btn" id="resetConfigBtn">Reset Config</button>
+        </div>
+      </div>
+      </div>
+
+      <!-- USB printers -->
+      <div class="pane" data-pane="usb">
+        <div class="card">
+          <div class="usb-head">
+            <div class="card-title">USB Printers</div>
+            <button class="icon-btn" id="usbRefreshBtn" title="Look for printers again" aria-label="Refresh the printer list">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </button>
+          </div>
+          <div id="usbNotices"></div>
+          <div class="usb-loading" id="usbLoading" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+            Looking for printers…
+          </div>
+          <div id="usbList"></div>
+          <div class="usb-empty" id="usbEmpty" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            <b>No USB printers found</b>
+            <span id="usbEmptyHint"></span>
+          </div>
+          <p class="usb-foot" id="usbFoot" hidden></p>
         </div>
       </div>
 

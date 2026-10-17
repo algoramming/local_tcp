@@ -18,12 +18,21 @@ works. This installer wires Chrome to run `node index.js`, which sidesteps that.
 |----|----------------------------------|--------------|
 | macOS | `~/Library/Application Support/LocalTCP/index.js` (shebang → absolute node) | manifest JSON in each browser's `NativeMessagingHosts/` |
 | Linux | `~/.local/lib/algoramming/localtcp/index.js` (shebang → absolute node) | manifest JSON in each browser's `NativeMessagingHosts/` |
-| Windows | `%APPDATA%\Algoramming\LocalTCP\run_bridge.bat` (calls node) | `HKCU` registry keys |
+| Windows | `%APPDATA%\Algoramming\LocalTCP\run_bridge.bat` (calls node), plus `usb_windows.ps1` (USB printer helper) | `HKCU` registry keys |
 
 Browsers covered: Chrome, Chrome Beta/Canary, Chromium, Microsoft Edge, Brave.
 
-`index.js` and the manifest template are **embedded at compile time**, so the
-installer is fully self-contained — no loose files to ship alongside it.
+`index.js`, `usb_windows.ps1` and the manifest template are **embedded at compile
+time**, so the installer is fully self-contained — no loose files to ship alongside it.
+
+**USB printing (Linux):** after a verified install, the installer adds
+`/etc/udev/rules.d/70-localtcp-usb-printers.rules` so the signed-in user can write
+to `/dev/usb/lp*`. That needs root once: it runs directly as root, through `sudo`
+when started from a terminal, or through `pkexec` (the desktop's password dialog)
+when the `.run` is double-clicked, so the one installer always covers both network
+and USB printing. Only if none of those exists does it print the manual step. The
+uninstaller removes the rule the same way. On Windows the
+uninstaller first stops a running USB helper, which can hold its cached DLL open.
 
 ## Build
 
@@ -56,4 +65,4 @@ printf '' # the extension's popup bridge-check is the easiest path
 ```
 
 The extension popup's bridge status should report the `index.js` version
-(`2.1.0`). A successful test print confirms the full path end-to-end.
+(`2.1.1`). A successful test print confirms the full path end-to-end.

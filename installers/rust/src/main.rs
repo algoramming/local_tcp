@@ -22,6 +22,17 @@
 // The host's index.js and manifest template are embedded at compile time, so
 // the resulting installer is a single self-contained binary.
 //
+// USB printing adds two platform-specific pieces:
+//   * Windows : usb_windows.ps1, the helper index.js starts to reach USB
+//               printers (usbprint.sys) and the print spooler. Lives in the
+//               install dir, so the uninstaller's directory removal takes it
+//               (and its cached usb_helper_*.dll) away.
+//   * Linux   : a udev rule letting the signed-in user write to /dev/usb/lp*.
+//               It needs root once: the installer asks through sudo (terminal)
+//               or pkexec (desktop password dialog, when double-clicked), so the
+//               same single installer sets up network and USB printing. The
+//               uninstaller removes it the same way.
+//
 // WINDOWS DIAGNOSABILITY: this is a console program, and Windows tears down the
 // console the moment the last attached process exits. Double-clicked from
 // Explorer it therefore flashes and vanishes — success and failure look
@@ -43,6 +54,20 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const INDEX_JS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../host/index.js"));
 const MANIFEST_TMPL: &str =
     include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../host/com.algoramming.localtcp.json"));
+#[cfg_attr(not(windows), allow(dead_code))]
+const USB_WINDOWS_PS1: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../host/usb_windows.ps1"));
+#[cfg_attr(not(windows), allow(dead_code))]
+const USB_HELPER_FILE: &str = "usb_windows.ps1";
+
+// Linux: lets the signed-in user (systemd-logind's "uaccess") write to USB
+// printers without root. Sorted before 73-seat-late.rules, which applies the tag.
+#[cfg(target_os = "linux")]
+const UDEV_RULE_PATH: &str = "/etc/udev/rules.d/70-localtcp-usb-printers.rules";
+#[cfg(target_os = "linux")]
+const UDEV_RULE: &str = "# Local TCP Bridge: lets the signed-in user print to USB receipt printers\n\
+# (/dev/usb/lp*) without root. Added by the Local TCP installer, removed by its\n\
+# uninstaller.\n\
+SUBSYSTEM==\"usbmisc\", KERNEL==\"lp[0-9]*\", TAG+=\"uaccess\"\n";
 
 // --- Transcript --------------------------------------------------------------
 // Everything we print is also buffered here and flushed to a log file on exit,
@@ -227,6 +252,14 @@ fn install() -> Result<(), String> {
     make_executable(&index_path);
     say!("[INFO] Wrote {}", index_path.display());
 
+    // 1b. Windows: the USB printing helper that index.js starts on demand. It
+    //     compiles itself on first use and caches the result next to itself.
+    if cfg!(windows) {
+        let helper = dir.join(USB_HELPER_FILE);
+        write_file(&helper, USB_WINDOWS_PS1)?;
+        say!("[INFO] Wrote {}", helper.display());
+    }
+
     // 2. Determine the executable the manifest "path" should point at.
     let host_path: PathBuf = if cfg!(windows) {
         // Windows native messaging needs a launcher executable, not a .js.
@@ -261,6 +294,11 @@ fn install() -> Result<(), String> {
             "the install did not verify ({failures} failed check(s) above) — the bridge may not work"
         ));
     }
+
+    // Last on purpose: it may ask for a password, and the bridge is already
+    // installed and verified if the user cancels it.
+    #[cfg(target_os = "linux")]
+    setup_linux_usb_access();
 
     banner("✅ Installed");
     say!("Restart your browser completely, then use the Local TCP extension.");
@@ -304,6 +342,10 @@ fn uninstall() -> Result<(), String> {
         }
     }
 
+    // A running USB helper may hold its compiled DLL open; it must go first.
+    #[cfg(windows)]
+    stop_usb_helpers(&dir);
+
     if dir.exists() {
         match fs::remove_dir_all(&dir) {
             Ok(()) => say!("[INFO] Removed {}", dir.display()),
@@ -316,6 +358,9 @@ fn uninstall() -> Result<(), String> {
     } else {
         say!("[INFO] Nothing installed at {} — already clean.", dir.display());
     }
+
+    #[cfg(target_os = "linux")]
+    remove_linux_usb_access();
 
     verify_removal(&dir, &manifest_file, &mut problems);
 
@@ -399,6 +444,14 @@ fn verify_removal(dir: &Path, manifest_file: &str, problems: &mut Vec<String>) {
         }
     }
 
+    // Reported, not counted as a failure: the rule is harmless on its own, and
+    // removing it needs a password the user may not have been able to give.
+    #[cfg(target_os = "linux")]
+    if Path::new(UDEV_RULE_PATH).exists() {
+        warn!("  [WARN] {UDEV_RULE_PATH} is still present. Remove it with:");
+        warn!("         sudo rm -f {UDEV_RULE_PATH}");
+    }
+
     if problems.is_empty() {
         say!("  [OK]   no registrations left behind");
         say!("[OK] All checks passed.");
@@ -422,6 +475,9 @@ fn verify(dir: &Path, host_path: &Path, node: &str) -> usize {
     let mut expected = vec![dir.join("index.js"), dir.join(format!("{HOST_NAME}.json"))];
     if !expected.contains(&host_path.to_path_buf()) {
         expected.push(host_path.to_path_buf());
+    }
+    if cfg!(windows) {
+        expected.push(dir.join(USB_HELPER_FILE));
     }
     for f in expected {
         if f.exists() {
@@ -585,6 +641,142 @@ fn reg_value(key: &str, name: Option<&str>) -> Option<String> {
         }
     }
     None
+}
+
+// --- USB printing -------------------------------------------------------------
+
+// Linux keeps /dev/usb/lp* for root and the `lp` group, which desktop users are
+// rarely in. The udev rule below hands the device to whoever is signed in at
+// the screen (systemd-logind's "uaccess"), taking effect without a re-login.
+#[cfg(target_os = "linux")]
+fn setup_linux_usb_access() {
+    say!("");
+    say!("[USB] Printing to USB printers");
+    if fs::read_to_string(UDEV_RULE_PATH).map(|s| s == UDEV_RULE).unwrap_or(false) {
+        say!("  [OK]   USB printer access is already set up.");
+        return;
+    }
+    say!("  Linux lets only the printer group use USB printers. A small udev rule gives");
+    say!("  the signed-in user access. Adding it needs administrator rights once, so");
+    say!("  you may be asked for your password. Network printing works either way.");
+    // The rule goes in on stdin: no temp file another user could swap out
+    // between our write and root copying it into /etc.
+    let script = "umask 022 && cat > \"$1\" && \
+                  { udevadm control --reload-rules; udevadm trigger --subsystem-match=usbmisc --action=change; true; }";
+    match run_as_root(script, &[UDEV_RULE_PATH], Some(UDEV_RULE)) {
+        Some(true) => say!("  [OK]   USB printer access enabled ({UDEV_RULE_PATH})."),
+        Some(false) => {
+            warn!("  [WARN] USB printer access was not set up (the command failed or no password was given).");
+            print_usb_access_hint();
+        }
+        None => {
+            say!("  [INFO] Skipped: there was no way to ask for the administrator password");
+            say!("         (no terminal, and no desktop password dialog).");
+            print_usb_access_hint();
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn print_usb_access_hint() {
+    say!("         To print to USB printers later, run this once, then log out and back in:");
+    say!("           sudo usermod -aG lp $USER");
+}
+
+#[cfg(target_os = "linux")]
+fn remove_linux_usb_access() {
+    if !Path::new(UDEV_RULE_PATH).exists() {
+        return;
+    }
+    say!("[INFO] Removing the USB printer access rule; you may be asked for your password.");
+    let script = "rm -f \"$1\" && { udevadm control --reload-rules; true; }";
+    if run_as_root(script, &[UDEV_RULE_PATH], None) == Some(true) {
+        say!("[INFO] Removed {UDEV_RULE_PATH}");
+    }
+    // Otherwise verify_removal() reports it, with the command to run.
+}
+
+// Runs `sh -c <script> sh <args>...` as root, so the one installer can always set
+// up USB access however it was started:
+//   * already root      → directly
+//   * from a terminal   → sudo (it reads the password from the terminal, so
+//                         `input` can still be fed on stdin)
+//   * double-clicked    → pkexec, the desktop's own password dialog (polkit)
+// None when none of these is available, so the caller can print the manual steps.
+#[cfg(target_os = "linux")]
+fn run_as_root(script: &str, args: &[&str], input: Option<&str>) -> Option<bool> {
+    use std::io::{IsTerminal, Write};
+    use std::process::Stdio;
+
+    let is_root = Command::new("id")
+        .arg("-u")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "0")
+        .unwrap_or(false);
+    let has_desktop = ["DISPLAY", "WAYLAND_DISPLAY"]
+        .iter()
+        .any(|v| env::var(v).map(|s| !s.is_empty()).unwrap_or(false));
+    let (mut cmd, how) = if is_root {
+        (Command::new("sh"), "sh")
+    } else if std::io::stdin().is_terminal() && locate("sudo").is_some() {
+        let mut c = Command::new("sudo");
+        c.arg("sh");
+        (c, "sudo")
+    } else if has_desktop && locate("pkexec").is_some() {
+        // pkexec wants an absolute program path and keeps stdin/stdout/stderr.
+        let mut c = Command::new("pkexec");
+        c.arg("/bin/sh");
+        (c, "pkexec")
+    } else {
+        return None;
+    };
+    cmd.arg("-c").arg(script).arg("sh").args(args);
+    cmd.stdin(if input.is_some() { Stdio::piped() } else { Stdio::inherit() });
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("  [WARN] could not run {how}: {e}");
+            return Some(false);
+        }
+    };
+    if let Some(text) = input {
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(text.as_bytes());
+        } // dropped: closes the pipe, so `cat` sees the end of the input
+    }
+    Some(child.wait().map(|s| s.success()).unwrap_or(false))
+}
+
+// A USB helper the browser started may still be running and hold its compiled
+// DLL open, which would stop the install directory from being deleted. Only
+// PowerShell processes running *our* helper script are stopped.
+#[cfg(windows)]
+fn stop_usb_helpers(dir: &Path) {
+    let script = dir.join(USB_HELPER_FILE);
+    if !script.exists() {
+        return;
+    }
+    let needle = script.to_string_lossy().to_lowercase().replace('\'', "''");
+    let command = format!(
+        "Get-CimInstance Win32_Process -Filter \"Name='powershell.exe'\" | \
+         Where-Object {{ $_.CommandLine -and $_.CommandLine.ToLower().Contains('{needle}') }} | \
+         ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $_.ProcessId }}"
+    );
+    match Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &command])
+        .output()
+    {
+        Ok(o) => {
+            let stopped = String::from_utf8_lossy(&o.stdout).lines().filter(|l| !l.trim().is_empty()).count();
+            if stopped > 0 {
+                say!("[INFO] Stopped {stopped} running USB helper process(es).");
+                // Give Windows a moment to release the files they had open.
+                std::thread::sleep(std::time::Duration::from_millis(800));
+            }
+        }
+        Err(e) => warn!("[WARN] could not check for running USB helpers: {e}"),
+    }
 }
 
 // --- Platform paths ---
