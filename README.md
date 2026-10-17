@@ -303,18 +303,20 @@ Since **v2.1.2** the bridge also prints to **USB receipt printers**, including t
 | 🐧 **Linux** | Straight to `/dev/usb/lp*`, or RAW through CUPS printers | The installer asks for your password once to add a udev rule allowing USB printer access |
 | 🍎 **macOS** | RAW through printers added in System Settings → Printers & Scanners | Add the printer there once |
 
-Printers are listed in two kinds: **`device`** (connected by USB; the bridge writes to it directly) and **`queue`** (an installed printer; the bytes pass through the OS print queue untouched, so ESC/POS cut, drawer and raster commands still work).
+Printers come in two kinds: **`device`** (connected by USB; the bridge writes to it directly) and **`queue`** (an installed printer; the bytes pass through the OS print queue untouched, so ESC/POS cut, drawer and raster commands still work).
 
-**In the popup:** switch to the **USB** tab, press **Test print**, and optionally **Set as default**. `USB_PRINT` without a `printerId` uses the default.
+Each printer also has a **`category`**: `receipt` (it reports ESC/POS, or has a receipt-printer name), `other` (an office, PDF or label printer: raw ESC/POS would print as symbols) or `unknown`. Receipt printers come first, with `paperWidthMm` when the model name gives it away (`XP-80C` → 80). An installed queue that drives a listed USB device carries `devicePrinterId`, so the same printer isn't shown twice.
+
+**In the popup:** switch to the **USB** tab. Receipt printers are listed first (office printers are folded away). Press **Test receipt** to check the paper width, text styles, a barcode and the cutter, and optionally **Set as default**. `USB_PRINT` without a `printerId` uses the default.
 
 ```js
-// USB needs bridge v2.1.1+, which reports its features
+// USB needs bridge v2.1.2+, which reports its features
 const info = await printer.checkBridge();
 if (!(info.features || []).includes('usb')) alert('Please update Local TCP.');
 
 // 1. Find the printers the bridge can reach
 const { printers } = await printer._send({ action: 'USB_LIST' });
-const p = printers[0]; // { id, kind, name, vendorId, productId, serialNumber, ... }
+const p = printers[0]; // receipt printers first: { id, name, category, paperWidthMm, vendorId, ... }
 
 // 2. Print. Base64 keeps big raster receipts small. `match` lets the bridge
 //    find the printer again if it was moved to another USB port.
@@ -370,7 +372,7 @@ For any other client, this is the full contract. Post to `window` with `source: 
 | `bytesSent` | number | `PRINT` / `SEND` |
 | `data` | number[] | bytes read back |
 | `features` | string[] | `CHECK_BRIDGE`, e.g. `["tcp","usb"]` |
-| `printers` | object[] | `USB_LIST` |
+| `printers` | object[] | `USB_LIST` (receipt printers first, see `category`) |
 | `code` | string | USB failure code |
 | `error` | string | present on failure |
 
