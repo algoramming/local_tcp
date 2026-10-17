@@ -790,14 +790,14 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="eyebrow">New in v2.1.2</span>
-      <h2>USB printers, too</h2>
+      <h2>USB receipt printers, too</h2>
       <p>The bridge also prints to USB receipt printers, including the ones a browser can't reach on its own. Standard USB printers need <strong>no printer driver</strong>: the bridge uses the USB printer support already built into the operating system.</p>
     </div>
 
     <div class="two-col">
       <div class="reveal" data-d="1">
         <h3 style="font-size:18px;margin-bottom:6px;">Where it works</h3>
-        <p style="color:var(--muted);font-size:14.5px;margin-bottom:16px;">Printers are listed in two groups: <strong>connected by USB</strong> (the bridge writes to the printer directly) and <strong>installed printers</strong> (the operating system's print queue, with the bytes passed through untouched).</p>
+        <p style="color:var(--muted);font-size:14.5px;margin-bottom:16px;">The popup's <strong>USB</strong> tab lists your <strong>receipt printers</strong> first, one row per printer, with its paper width when the model name tells it. Office printers (laser, inkjet, PDF, label) are folded away: raw ESC/POS would print as symbols on them.</p>
         <div class="table-wrap">
           <table>
             <thead><tr><th>System</th><th>How the bridge prints</th><th>One-time setup</th></tr></thead>
@@ -810,8 +810,8 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
         </div>
         <ol class="guide-steps" style="margin-top:26px;">
           <li><div><h4>Connect the printer</h4><p>Plug it in with USB and switch it on.</p></div></li>
-          <li><div><h4>Open the USB tab</h4><p>In the extension popup, switch to <strong>USB</strong>. Your printers are listed; press the refresh button after plugging one in.</p></div></li>
-          <li><div><h4>Print a test page</h4><p>Press <strong>Test print</strong>. Optionally press <strong>Set as default</strong>: web apps that print without naming a printer use the default one.</p></div></li>
+          <li><div><h4>Open the USB tab</h4><p>In the extension popup, switch to <strong>USB</strong>. Your receipt printers are listed; press the refresh button after plugging one in.</p></div></li>
+          <li><div><h4>Print a test receipt</h4><p>Press <strong>Test receipt</strong>: it checks the paper width (32 or 48 characters), bold, underline, a barcode and the cutter. Optionally press <strong>Set as default</strong>: web apps that print without naming a printer use it.</p></div></li>
         </ol>
       </div>
       <div class="reveal" data-d="2">
@@ -821,14 +821,15 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
           <div class="code-bar"><span class="fn"><span class="lang">JS</span> usb-receipt.js</span><span class="code-dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span></div>
 <pre><code><span class="tok-k">const</span> bridge = <span class="tok-k">new</span> <span class="tok-f">LocalTcp</span>();
 
-<span class="tok-c">// 1 · USB needs bridge v2.1.1+ (it reports features)</span>
+<span class="tok-c">// 1 · USB needs bridge v2.1.2+ (it reports features)</span>
 <span class="tok-k">const</span> info = <span class="tok-k">await</span> bridge.<span class="tok-f">checkBridge</span>();
 <span class="tok-k">if</span> (!(info.features || []).<span class="tok-f">includes</span>(<span class="tok-s">'usb'</span>))
   <span class="tok-k">return</span> <span class="tok-f">alert</span>(<span class="tok-s">'Please update Local TCP.'</span>);
 
 <span class="tok-c">// 2 · find the printers the bridge can reach</span>
 <span class="tok-k">const</span> list = <span class="tok-k">await</span> bridge.<span class="tok-f">_send</span>({ action: <span class="tok-s">'USB_LIST'</span> });
-<span class="tok-k">const</span> p = list.printers[<span class="tok-n">0</span>]; <span class="tok-c">// { id, kind, name, … }</span>
+<span class="tok-c">// receipt printers come first: category "receipt"</span>
+<span class="tok-k">const</span> p = list.printers[<span class="tok-n">0</span>]; <span class="tok-c">// { id, name, category, … }</span>
 
 <span class="tok-c">// 3 · print ESC/POS bytes, base64 keeps receipts small</span>
 <span class="tok-k">const</span> res = <span class="tok-k">await</span> bridge.<span class="tok-f">_send</span>({
@@ -897,7 +898,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
               <tr><td><code>bytesSent</code></td><td>number</td><td><code>PRINT</code> / <code>SEND</code></td></tr>
               <tr><td><code>data</code></td><td>number[]</td><td>bytes read back on <code>readTimeoutMs</code></td></tr>
               <tr><td><code>features</code></td><td>string[]</td><td><code>CHECK_BRIDGE</code>: e.g. <code>["tcp","usb"]</code></td></tr>
-              <tr><td><code>printers</code></td><td>object[]</td><td><code>USB_LIST</code>: id, kind, name, vendorId, …</td></tr>
+              <tr><td><code>printers</code></td><td>object[]</td><td><code>USB_LIST</code>: id, name, <code>category</code> (receipt · unknown · other), paperWidthMm, …</td></tr>
               <tr><td><code>code</code></td><td>string</td><td>USB failures: <code>notFound</code>, <code>busy</code>, <code>timeout</code>, …</td></tr>
               <tr><td><code>error</code></td><td>string</td><td>present on failure</td></tr>
             </tbody>

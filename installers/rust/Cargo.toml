@@ -1,6 +1,6 @@
 [package]
 name = "localtcp-installer"
-version = "2.1.1"
+version = "2.1.2"
 edition = "2021"
 description = "Cross-platform installer for the Local TCP native messaging host (Node.js)"
 

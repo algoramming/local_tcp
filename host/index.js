@@ -35,7 +35,7 @@ const { spawn, execFile } = require('child_process');
 // Reported back on PING so the popup's "bridge status" shows which host is live.
 // Independent of the extension's manifest version on purpose: this is the value
 // that tells you *which native host binary* is actually installed.
-const VERSION = '2.1.1';
+const VERSION = '2.1.2';
 
 // What this host can do, reported on PING. Clients feature-detect on this
 // instead of comparing versions: a host without 'usb' predates USB printing.
@@ -361,7 +361,7 @@ async function listUsbPrinters(opts) {
   } else if (PLATFORM === 'mac') {
     notes.push({ code: 'cupsUnavailable', level: 'warn', message: 'The macOS printing system (CUPS) did not respond, so installed printers could not be listed.' });
   }
-  return { printers, notes };
+  return { printers: classifyPrinters(printers), notes };
 }
 
 // ─── USB_PRINT ───────────────────────────────────────────────────────────────
@@ -460,6 +460,79 @@ async function findMatchingPrinter(printerId, match) {
   return candidates.length === 1 ? candidates[0] : null; // never guess between twins
 }
 
+// ─── Receipt printer detection ───────────────────────────────────────────────
+// The bridge is for ESC/POS receipt printers, but the OS lists show office
+// printers (laser, inkjet, PDF, label) too, and raw ESC/POS sent to those prints
+// pages of symbols. Every printer gets a `category` so clients can lead with
+// the receipt printers:
+//   'receipt' — reports ESC/POS in its IEEE 1284 ID, or has a receipt-printer name
+//   'other'   — reports an office/label command set, or has an office-printer name
+//   'unknown' — nothing to go on (many unbranded receipt printers look like this)
+// The printer's own command set wins over any name.
+
+const RECEIPT_CMD = /ESC\s*\/?\s*POS|STAR\s*(LINE|PRNT)/i;
+const OTHER_CMD = /\b(PCL\w*|PJL|POSTSCRIPT|PS|URF|PWG\w*|PDF|ESCPL2|ESC\/P-?R|ESCPR\w*|BDC|IPP\w*|XPS|LIPS\w*|RPCS|GDI|CAPT|ZPL\w*|EPL\d?|CPCL|TSPL\d?)\b/i;
+const RECEIPT_NAME = new RegExp([
+  'receipt', 'thermal', 'esc\\/?pos', '\\bpos[\\s_-]?(58|76|80)', '\\bpos\\b', 'kitchen', 'ticket',
+  '\\btm[\\s_-]?[tmpuhl]\\d', '\\btsp\\s?\\d', '\\bsp\\s?7\\d\\d', 'mc-?print', '\\bsrp-?\\d', 'bixolon', 'posiflex',
+  'xprinter', '\\bxp-?(58|80|n\\d{3}|q\\d{3}|t\\d{2})', 'rongta', '\\brp[\\s_-]?(58|80|\\d{3})', 'hprt', 'gprinter',
+  '\\bgp-?\\d', 'zjiang', '\\bzj-?\\d', 'goojprt', 'munbyn', 'sunmi', '\\bct-?s\\d', '\\bdeli\\b',
+  'generic\\s*\\/\\s*text only', '\\b(58|80)\\s?mm\\b'
+].join('|'), 'i');
+const OTHER_NAME = new RegExp([
+  'laserjet', 'deskjet', 'officejet', '\\benvy\\b', 'pagewide', 'smart tank', 'pixma', 'imageclass', 'imagerunner',
+  'maxify', 'selphy', 'ecotank', 'workforce', 'surecolor', 'stylus', 'epson\\s+(et|wf|xp|l)-?\\d{3,4}', '\\bhl-',
+  '\\bmfc-', '\\bdcp-', 'kyocera', 'ecosys', 'taskalfa', 'ricoh', 'lexmark', 'xerox', 'workcentre', 'versalink',
+  'phaser', 'bizhub', 'konica', '\\boki\\b', '\\blbp\\d', '\\bmf\\d{3}', '\\bg[1-7]0\\d0\\b', 'pdf', 'xps',
+  'onenote', '\\bfax\\b', 'ipp class', 'mopria', 'postscript', '\\bpcl\\b', 'zebra', '\\bzpl\\b', 'label', 'dymo'
+].join('|'), 'i');
+
+// Paper width from the model name, when it says (XP-80C, POS-58, RP80, ...).
+// Only ever a hint: the app's own paper-size setting stays the authority.
+function paperWidthHint(text) {
+  if (/\btm[\s_-]?(t(20|70|81|82|83|86|88|90)|m(30|50))/i.test(text)) return 80; // Epson TM-T/TM-m: 80 mm
+  if (/\btm[\s_-]?p20/i.test(text)) return 58;
+  const m = /(?:^|[^0-9])(58|80)(?:\s?mm)?(?![0-9])/i.exec(text);
+  return m ? Number(m[1]) : null;
+}
+
+function classifyPrinter(p) {
+  const cmd = p.commandSet || '';
+  const text = [p.name, p.model, p.manufacturer, p.driver].filter(Boolean).join(' ');
+  if (RECEIPT_CMD.test(cmd)) p.category = 'receipt';
+  else if (cmd && OTHER_CMD.test(cmd)) p.category = 'other';
+  else if (RECEIPT_NAME.test(text)) p.category = 'receipt';
+  else if (OTHER_NAME.test(text)) p.category = 'other';
+  else p.category = 'unknown';
+  if (p.category === 'receipt') {
+    const width = paperWidthHint(text);
+    if (width) p.paperWidthMm = width;
+  }
+}
+
+// Classifies every printer, lets a queue and the USB device it drives (one
+// physical printer) share what each knows, and puts receipt printers first.
+function classifyPrinters(printers) {
+  printers.forEach(classifyPrinter);
+  for (const q of printers) {
+    if (!q.devicePrinterId) continue;
+    const d = printers.find((p) => p.id === q.devicePrinterId);
+    if (!d) continue;
+    // The device's own command set is the better witness; the queue's driver
+    // name fills in when the device said nothing.
+    const known = d.category !== 'unknown' ? d : q;
+    d.category = q.category = known.category;
+    const width = d.paperWidthMm || q.paperWidthMm;
+    if (width && known.category === 'receipt') d.paperWidthMm = q.paperWidthMm = width;
+  }
+  const rank = { receipt: 0, unknown: 1, other: 2 };
+  // Stable sort: within a category, the platform order (devices first) stays.
+  return printers
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => (rank[a.p.category] - rank[b.p.category]) || (a.i - b.i))
+    .map((x) => x.p);
+}
+
 // ─── Shared parsing ──────────────────────────────────────────────────────────
 
 // IEEE 1284 Device ID, e.g. "MFG:Xprinter;MDL:XP-80C;CMD:ESC/POS;".
@@ -542,6 +615,7 @@ function listLinuxDevices() {
       name: usbDisplayName(info, product, hasIds ? vendorId : null, hasIds ? productId : null),
       manufacturer,
       model: info.model || product || null,
+      commandSet: info.commandSet || null,
       vendorId: hasIds ? vendorId : null,
       productId: hasIds ? productId : null,
       serialNumber,
@@ -973,6 +1047,7 @@ async function listWindowsPrinters(opts) {
       name: usbDisplayName(info, d.busName, ids.vendorId, ids.productId),
       manufacturer: info.manufacturer || null,
       model: info.model || d.busName || null,
+      commandSet: info.commandSet || null,
       vendorId: ids.vendorId,
       productId: ids.productId,
       serialNumber: ids.serialNumber || info.serialNumber || null,
@@ -998,7 +1073,7 @@ async function listWindowsPrinters(opts) {
       devicePrinterId: device ? device.id : null,
     });
   }
-  return { printers, notes };
+  return { printers: classifyPrinters(printers), notes };
 }
 
 function sameText(a, b) {

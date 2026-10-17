@@ -38,7 +38,9 @@ const ICONS = {
   warn: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
   error: '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>',
-  spinner: '<path d="M21 12a9 9 0 1 1-6.219-8.56"></path>'
+  spinner: '<path d="M21 12a9 9 0 1 1-6.219-8.56"></path>',
+  // A thermal receipt printer: paper with a torn edge coming out of the top.
+  receipt: '<path d="M7 10V3.5l1.25 1 1.25-1 1.25 1 1.25-1 1.25 1 1.25-1 1.25 1 1.25-1V10"></path><line x1="9.5" y1="7.2" x2="14.5" y2="7.2"></line><rect x="3" y="10" width="18" height="9" rx="2"></rect><line x1="7" y1="14" x2="13" y2="14"></line><circle cx="17" cy="14.5" r="0.6" fill="currentColor"></circle>'
 };
 
 function icon(name, extraClass) {
@@ -197,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     notes: [],
     platform: null,
     error: null,
-    showNetwork: false,
+    showOthers: false,
     defaultPrinter: null,
     results: {} // printer id -> { type, text } from the last test print
   };
@@ -224,7 +226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       usb.error = null;
       if (!quiet) {
         const n = visiblePrinters().length;
-        addLog(n ? `Found ${n} USB printer${n === 1 ? '' : 's'}.` : 'No USB printers found.', n ? 'success' : 'info');
+        addLog(n ? `Found ${n} USB receipt printer${n === 1 ? '' : 's'}.` : 'No USB receipt printer found.', n ? 'success' : 'info');
       }
     } else {
       usb.printers = [];
@@ -235,12 +237,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderUsb();
   }
 
-  // Network queues belong to the Network tab; they stay folded away here.
+  // The tab leads with receipt printers, one row per physical printer.
+  // Everything else is folded away: office printers (raw ESC/POS prints pages
+  // of symbols on them), network printers (the Network tab's job), and the OS
+  // print queue of a printer already listed as a USB device (same printer).
   function isNetworkQueue(p) {
     return p.kind === 'queue' && p.connection === 'network';
   }
+  function linkedDevice(p) {
+    return p.kind === 'queue' && p.devicePrinterId ? usb.printers.find((d) => d.id === p.devicePrinterId) : null;
+  }
+  function isMainPrinter(p) {
+    return p.category !== 'other' && !isNetworkQueue(p) && !linkedDevice(p);
+  }
   function visiblePrinters() {
-    return usb.printers.filter((p) => !isNetworkQueue(p));
+    return usb.printers.filter(isMainPrinter);
   }
 
   function matchOf(p) {
@@ -254,22 +265,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     return ('0000' + Number(n).toString(16)).slice(-4);
   }
 
-  // Detail lines under the printer name: [text, optional trailing id kept on one line].
+  function speaksEscPos(p) {
+    return /ESC\s*\/?\s*POS/i.test(p.commandSet || '');
+  }
+
+  // How the bridge reaches the printer, in a cashier's words. Each line is
+  // [text, optional tail kept on one line].
   function describe(p) {
     const lines = [];
+    const viaDriver = usb.platform === 'win' ? 'Windows printer driver' : 'system print queue';
     if (p.kind === 'device') {
-      const id = p.vendorId != null && p.productId != null ? `${hex4(p.vendorId)}:${hex4(p.productId)}` : null;
-      lines.push(['Direct USB · no driver needed', id]);
-      if (Array.isArray(p.queues) && p.queues.length) {
-        lines.push([`Also installed as: ${p.queues.join(', ')}`, null]);
-      }
+      lines.push([`${speaksEscPos(p) ? 'ESC/POS · ' : ''}USB, no driver needed`, null]);
+      const id = p.vendorId != null && p.productId != null ? `ID ${hex4(p.vendorId)}:${hex4(p.productId)}` : null;
+      if (id) lines.push([id, null]);
     } else {
-      const where = usb.platform === 'win' ? 'Windows printer' : 'System printer';
-      const via = { usb: 'USB', network: 'network', serial: 'serial port' }[p.connection];
       const port = p.port && usb.platform === 'win' ? `(${p.port})` : null;
-      lines.push([via ? `${where} · ${via}` : where, port]);
+      lines.push([`Through the ${viaDriver}`, port]);
     }
     return lines;
+  }
+
+  // Why a folded printer isn't in the main list.
+  function foldReason(p) {
+    if (p.category === 'other') return 'Not a receipt printer (office or label printer). A test receipt would print as symbols.';
+    const device = linkedDevice(p);
+    if (device && isMainPrinter(device)) {
+      return `The ${usb.platform === 'win' ? 'Windows driver' : 'print queue'} of “${device.name}” above, the same printer.`;
+    }
+    if (isNetworkQueue(p)) return 'Network printer: set receipt printers on the network up in the Network tab.';
+    return 'Another route to a printer listed above.';
   }
 
   function statusChip(p) {
@@ -324,9 +348,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const note of usb.notes) {
       const level = note.level === 'warn' ? 'warn' : note.level === 'error' ? 'error' : 'info';
       const opts = {};
+      let message = note.message;
       if (note.code === 'permissionDenied' && usb.platform === 'linux') opts.command = 'sudo usermod -aG lp $USER';
       if (note.code === 'usblpMissing') opts.command = 'sudo modprobe usblp';
-      addNotice(level, note.message, opts);
+      if (note.code === 'webUsbPreferred') {
+        message = 'On a Mac, add the receipt printer once in System Settings → Printers & Scanners (any driver is fine: the bridge sends raw ESC/POS), then press refresh.';
+      }
+      addNotice(level, message, opts);
     }
   }
 
@@ -347,23 +375,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (res.detail) addLog(`USB details: ${res.detail}`, 'error');
   }
 
-  function buildRow(p) {
+  function buildRow(p, folded) {
     const isDefault = !!(usb.defaultPrinter && usb.defaultPrinter.id === p.id);
-    const row = el('div', 'usb-row' + (isDefault ? ' is-default' : ''));
+    const isReceipt = p.category !== 'other';
+    const row = el('div', 'usb-row' + (isDefault ? ' is-default' : '') + (folded ? ' is-folded' : ''));
     const top = el('div', 'usb-top');
 
-    const ico = el('div', 'usb-ico');
-    ico.appendChild(icon(p.kind === 'device' ? 'usb' : 'printer'));
+    const ico = el('div', 'usb-ico' + (isReceipt ? '' : ' muted'));
+    ico.appendChild(icon(p.category === 'receipt' ? 'receipt' : 'printer'));
     top.appendChild(ico);
 
     const main = el('div', 'usb-main');
     const name = el('div', 'usb-name', p.name || 'USB printer');
+    if (p.paperWidthMm) name.appendChild(el('span', 'chip chip-paper', `${p.paperWidthMm} mm`));
     if (isDefault) name.appendChild(el('span', 'chip chip-default', 'Default'));
-    if (p.isDefault && p.kind === 'queue') name.appendChild(el('span', 'chip chip-default', 'System default'));
     const chip = statusChip(p);
     if (chip) name.appendChild(el('span', `chip ${chip.cls}`, chip.text));
     main.appendChild(name);
-    for (const [text, tail] of describe(p)) {
+    const lines = folded ? [[foldReason(p), null]] : describe(p);
+    for (const [text, tail] of lines) {
       const meta = el('div', 'usb-meta', text);
       if (tail) {
         meta.appendChild(document.createTextNode(' '));
@@ -375,21 +405,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     row.appendChild(top);
 
     const actions = el('div', 'usb-actions');
-    const testBtnRow = el('button', 'mini-btn');
+    const testBtnRow = el('button', isReceipt ? 'mini-btn' : 'mini-btn ghost');
     testBtnRow.appendChild(icon('spinner', 'spinner'));
-    testBtnRow.appendChild(icon('printer'));
-    testBtnRow.appendChild(el('span', null, 'Test print'));
+    testBtnRow.appendChild(icon('receipt'));
+    testBtnRow.appendChild(el('span', null, isReceipt ? 'Test receipt' : 'Test anyway'));
     testBtnRow.disabled = p.accessible === false;
-    testBtnRow.title = p.accessible === false ? 'Allow USB printer access first (see the note above).' : 'Print a short test receipt';
+    testBtnRow.title = p.accessible === false
+      ? 'Allow USB printer access first (see the note above).'
+      : isReceipt
+        ? 'Print a short test receipt: paper width, styles, barcode and cut'
+        : 'This does not look like a receipt printer: it may print a page of symbols.';
     testBtnRow.addEventListener('click', () => testUsbPrint(p, testBtnRow));
     actions.appendChild(testBtnRow);
 
-    const defBtn = el('button', 'mini-btn ghost');
-    defBtn.appendChild(icon('star'));
-    defBtn.appendChild(el('span', null, isDefault ? 'Remove default' : 'Set as default'));
-    defBtn.title = 'Web apps that print without naming a USB printer use the default one.';
-    defBtn.addEventListener('click', () => toggleDefault(p));
-    actions.appendChild(defBtn);
+    if (isReceipt) {
+      const defBtn = el('button', 'mini-btn ghost');
+      defBtn.appendChild(icon('star'));
+      defBtn.appendChild(el('span', null, isDefault ? 'Remove default' : 'Set as default'));
+      defBtn.title = 'Web apps that print without naming a USB printer use the default one.';
+      defBtn.addEventListener('click', () => toggleDefault(p));
+      actions.appendChild(defBtn);
+    }
     row.appendChild(actions);
 
     const result = usb.results[p.id];
@@ -401,11 +437,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   function emptyHint() {
     switch (usb.platform || detectOs()) {
       case 'win':
-        return 'Connect the printer with USB, switch it on and press Refresh. Most receipt printers work without installing a driver.';
+        return 'Connect your receipt printer with USB, switch it on and press refresh. Most receipt printers work without installing a driver.';
       case 'mac':
-        return 'Add the printer in System Settings → Printers & Scanners, then press Refresh.';
+        return 'Add your receipt printer in System Settings → Printers & Scanners, then press refresh.';
       default:
-        return 'Connect the printer with USB, switch it on and press Refresh.';
+        return 'Connect your receipt printer with USB, switch it on and press refresh.';
     }
   }
 
@@ -423,7 +459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       usbCount.hidden = true;
       renderError({
         code: 'bridgeOutdated',
-        error: `The installed bridge${bridge.version ? ` (v${bridge.version})` : ''} can't print to USB printers yet. Download the latest Setup Kit and run it; your settings are kept.`
+        error: `The installed bridge${bridge.version ? ` (v${bridge.version})` : ''} can't print to USB receipt printers yet. Download the latest Setup Kit and run it; your settings are kept.`
       });
       return;
     }
@@ -436,39 +472,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     renderNotes();
 
-    const visible = visiblePrinters();
-    const devices = visible.filter((p) => p.kind === 'device');
-    const queues = visible.filter((p) => p.kind === 'queue');
-    const networkQueues = usb.printers.filter(isNetworkQueue);
+    const main = visiblePrinters();
+    const others = usb.printers.filter((p) => !isMainPrinter(p));
 
-    usbCount.textContent = String(visible.length);
-    usbCount.hidden = !usb.loaded || visible.length === 0;
+    usbCount.textContent = String(main.length);
+    usbCount.hidden = !usb.loaded || main.length === 0;
 
-    if (devices.length) {
-      if (queues.length) usbListEl.appendChild(el('div', 'usb-group', 'Connected by USB'));
-      devices.forEach((p) => usbListEl.appendChild(buildRow(p)));
-    }
-    if (queues.length) {
-      usbListEl.appendChild(el('div', 'usb-group', usb.platform === 'win' ? 'Installed Windows printers' : 'Installed printers'));
-      queues.forEach((p) => usbListEl.appendChild(buildRow(p)));
-    }
-    if (networkQueues.length) {
-      const toggle = el('button', 'link-btn', usb.showNetwork
-        ? 'Hide network printers'
-        : `Show ${networkQueues.length} network printer${networkQueues.length === 1 ? '' : 's'}`);
-      toggle.addEventListener('click', () => { usb.showNetwork = !usb.showNetwork; renderUsb(); });
-      usbListEl.appendChild(toggle);
-      if (usb.showNetwork) networkQueues.forEach((p) => usbListEl.appendChild(buildRow(p)));
-    }
+    main.forEach((p) => usbListEl.appendChild(buildRow(p, false)));
 
-    if (usb.loaded && !visible.length) {
+    if (usb.loaded && !main.length) {
       usbEmptyHint.textContent = emptyHint();
       usbEmpty.hidden = false;
     }
 
+    if (others.length) {
+      const toggle = el('button', 'link-btn fold-toggle', usb.showOthers
+        ? 'Hide other printers'
+        : `Other printers on this computer (${others.length})`);
+      toggle.addEventListener('click', () => { usb.showOthers = !usb.showOthers; renderUsb(); });
+      usbListEl.appendChild(toggle);
+      if (usb.showOthers) {
+        usbListEl.appendChild(el('p', 'fold-caption', 'Office printers, network printers, and a second route to the receipt printers above. They are not needed for receipts.'));
+        others.forEach((p) => usbListEl.appendChild(buildRow(p, true)));
+      }
+    }
+
     const def = usb.defaultPrinter;
     if (usb.loaded && def && !usb.printers.some((p) => p.id === def.id)) {
-      usbFoot.textContent = `Your default USB printer “${def.name || 'USB printer'}” isn't connected right now.`;
+      usbFoot.textContent = `Your default receipt printer “${def.name || 'USB printer'}” isn't connected right now.`;
       usbFoot.hidden = false;
     }
   }
@@ -477,18 +508,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (usb.defaultPrinter && usb.defaultPrinter.id === p.id) {
       await chrome.storage.local.remove('usbDefaultPrinter');
       usb.defaultPrinter = null;
-      addLog('Default USB printer cleared.', 'warning');
+      addLog('Default receipt printer cleared.', 'warning');
     } else {
       const def = { id: p.id, name: p.name, match: matchOf(p) };
       await chrome.storage.local.set({ usbDefaultPrinter: def });
       usb.defaultPrinter = def;
-      addLog(`Default USB printer: ${p.name}.`, 'success');
+      addLog(`Default receipt printer: ${p.name}.`, 'success');
     }
     renderUsb();
   }
 
-  // A short ESC/POS receipt: plain ASCII, readable on 58 mm and 80 mm paper.
-  function buildTestTicket(printerName) {
+  // A POS test receipt: header, printer details, a paper-width check, text
+  // styles, a barcode and a cut. Plain ASCII so any code page prints it.
+  function buildTestTicket(p) {
     const ascii = (s) => Array.from(String(s), (c) => {
       const code = c.charCodeAt(0);
       return code >= 0x20 && code < 0x7f ? code : 0x3f; // '?' for anything else
@@ -497,23 +529,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pad = (n) => String(n).padStart(2, '0');
     const d = new Date();
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const rule = ascii('-'.repeat(32));
+    const rule = [...ascii('-'.repeat(32)), LF];
+    const digits = (n) => ascii('1234567890'.repeat(5).slice(0, n));
+    const link = p.kind === 'device' ? 'USB, no driver' : (usb.platform === 'win' ? 'Windows driver' : 'Print queue');
     return [
-      0x1b, 0x40,                         // ESC @  initialise
-      0x1b, 0x61, 0x01,                   // ESC a 1  centre
-      0x1d, 0x21, 0x11, 0x1b, 0x45, 0x01, // GS ! double size, ESC E bold
-      ...ascii('Local TCP'), LF,
+      0x1b, 0x40,                               // ESC @     initialise
+      0x1b, 0x61, 0x01,                         // ESC a 1   centre
+      0x1d, 0x21, 0x11, 0x1b, 0x45, 0x01,       // GS ! 0x11 double size, ESC E 1 bold
+      ...ascii('LOCAL TCP'), LF,
       0x1d, 0x21, 0x00, 0x1b, 0x45, 0x00,
-      ...ascii('USB test print'), LF, LF,
-      0x1b, 0x61, 0x00,                   // left
-      ...rule, LF,
-      ...ascii(`Printer: ${printerName || 'USB printer'}`), LF,
+      ...ascii('Receipt printer test'), LF, LF,
+      0x1b, 0x61, 0x00,                         // ESC a 0   left
+      ...rule,
+      ...ascii(`Printer: ${p.name || 'USB printer'}`), LF,
+      ...ascii(`Link:    ${link}`), LF,
       ...ascii(`Time:    ${stamp}`), LF,
-      ...rule, LF,
-      0x1b, 0x61, 0x01,
-      ...ascii('USB printing works!'), LF,
-      0x1b, 0x64, 0x04,                   // ESC d 4  feed four lines
-      0x1d, 0x56, 0x42, 0x00              // GS V 66 0  feed and partial cut
+      ...rule,
+      ...ascii('Paper width check'), LF,
+      ...ascii('58 mm paper: 32 characters'), LF,
+      ...digits(32), LF,
+      ...ascii('80 mm paper: 48 characters'), LF,
+      ...digits(48), LF,
+      ...rule,
+      0x1b, 0x45, 0x01, ...ascii('Bold'), 0x1b, 0x45, 0x00, ...ascii('  '),
+      0x1b, 0x2d, 0x01, ...ascii('Underline'), 0x1b, 0x2d, 0x00, ...ascii('  '),
+      0x1d, 0x42, 0x01, ...ascii(' Reverse '), 0x1d, 0x42, 0x00, LF, LF,
+      0x1b, 0x61, 0x01,                         // centre
+      0x1d, 0x68, 0x50,                         // GS h 80   barcode height
+      0x1d, 0x77, 0x02,                         // GS w 2    module width
+      0x1d, 0x48, 0x02,                         // GS H 2    numbers below
+      0x1d, 0x6b, 0x04, ...ascii('TEST1234'), 0x00, // GS k 4  CODE39
+      LF, LF,
+      ...ascii('If this looks right, the printer'), LF,
+      ...ascii('is ready for receipts.'), LF,
+      0x1b, 0x64, 0x05,                         // ESC d 5   feed
+      0x1d, 0x56, 0x42, 0x00                    // GS V 66 0 feed and partial cut
     ];
   }
 
@@ -526,25 +576,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function testUsbPrint(p, button) {
     button.disabled = true;
     button.classList.add('loading');
-    addLog(`Sending a test print to ${p.name}...`, 'info');
+    addLog(`Printing a test receipt on ${p.name}...`, 'info');
     const res = await sendMessage({
       action: 'USB_PRINT',
       printerId: p.id,
       match: matchOf(p),
-      dataB64: toBase64(buildTestTicket(p.name)),
-      jobName: 'Local TCP test print'
+      dataB64: toBase64(buildTestTicket(p)),
+      jobName: 'Local TCP test receipt'
     });
     if (res.success) {
-      usb.results[p.id] = { type: 'success', text: 'Test print sent. Check the printer.' };
-      addLog(`Test print sent to ${p.name} (${res.bytesSent} bytes).`, 'success');
+      usb.results[p.id] = { type: 'success', text: 'Test receipt sent. Check the paper width line, the barcode and the cut.' };
+      addLog(`Test receipt sent to ${p.name} (${res.bytesSent} bytes).`, 'success');
       // The printer came back under another id (new USB port): follow it.
       if (res.resolvedPrinterId && usb.defaultPrinter && usb.defaultPrinter.id === p.id) {
         usb.defaultPrinter = { ...usb.defaultPrinter, id: res.resolvedPrinterId };
         await chrome.storage.local.set({ usbDefaultPrinter: usb.defaultPrinter });
       }
     } else {
-      usb.results[p.id] = { type: 'error', text: res.error || 'The test print failed.' };
-      addLog(`Test print failed: ${res.error || 'unknown error'}`, 'error');
+      usb.results[p.id] = { type: 'error', text: res.error || 'The test receipt failed.' };
+      addLog(`Test receipt failed: ${res.error || 'unknown error'}`, 'error');
       if (res.detail) addLog(`Details: ${res.detail}`, 'error');
       if (res.code === 'bridgeOutdated') bridge = { ...bridge, features: ['tcp'] };
     }

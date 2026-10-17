@@ -65,4 +65,4 @@ printf '' # the extension's popup bridge-check is the easiest path
 ```
 
 The extension popup's bridge status should report the `index.js` version
-(`2.1.1`). A successful test print confirms the full path end-to-end.
+(`2.1.2`). A successful test print confirms the full path end-to-end.
