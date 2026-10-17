@@ -230,6 +230,8 @@ Use the official package, one type-safe API for **mobile, desktop, and web**. On
 
 **Pub.dev:** [`flutter_esc_pos_network_universal`](https://pub.dev/packages/flutter_esc_pos_network_universal)
 
+**USB printers:** [`flutter_esc_pos_usb_universal`](https://pub.dev/packages/flutter_esc_pos_usb_universal) has the same API. In Chrome or Edge on Windows and Linux it prints through this bridge (`USB_LIST` / `USB_PRINT`); apps on Android, Windows, macOS and Linux reach the printer directly.
+
 ### 1 · Add the dependency
 
 ```yaml

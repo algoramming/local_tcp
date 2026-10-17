@@ -348,12 +348,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const note of usb.notes) {
       const level = note.level === 'warn' ? 'warn' : note.level === 'error' ? 'error' : 'info';
       const opts = {};
-      let message = note.message;
+      const message = note.message;
       if (note.code === 'permissionDenied' && usb.platform === 'linux') opts.command = 'sudo usermod -aG lp $USER';
       if (note.code === 'usblpMissing') opts.command = 'sudo modprobe usblp';
-      if (note.code === 'webUsbPreferred') {
-        message = 'On a Mac, add the receipt printer once in System Settings → Printers & Scanners (any driver is fine: the bridge sends raw ESC/POS), then press refresh.';
-      }
       addNotice(level, message, opts);
     }
   }

@@ -22,9 +22,10 @@
 //               Windows printer. Node can't call those APIs itself, so this
 //               delegates to usb_windows.ps1, a long-lived PowerShell helper.
 //   * Linux   : /dev/usb/lp* (the kernel's usblp driver), or RAW through CUPS.
-//   * macOS   : RAW through CUPS printers added in System Settings. Chrome on
-//               macOS can also reach USB printers itself (WebUSB), so the
-//               bridge is the fallback there.
+//   * macOS   : straight to the printer through macOS's own CUPS `usb`
+//               backend (no driver, nothing to add in System Settings), or RAW
+//               through installed CUPS printers. Chrome on macOS can also
+//               reach USB printers itself (WebUSB).
 'use strict';
 
 const net = require('net');
