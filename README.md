@@ -301,7 +301,7 @@ Since **v2.1.2** the bridge also prints to **USB receipt printers**, including t
 |---|---|---|
 | 🪟 **Windows** | Straight to Windows' built-in USB printer driver (`usbprint.sys`), or RAW through any installed Windows printer | None |
 | 🐧 **Linux** | Straight to `/dev/usb/lp*`, or RAW through CUPS printers | The installer asks for your password once to add a udev rule allowing USB printer access |
-| 🍎 **macOS** | RAW through printers added in System Settings → Printers & Scanners | Add the printer there once |
+| 🍎 **macOS** | Straight to the printer through macOS's built-in USB printing support (the CUPS `usb` backend), or RAW through printers added in System Settings | None |
 
 Printers come in two kinds: **`device`** (connected by USB; the bridge writes to it directly) and **`queue`** (an installed printer; the bytes pass through the OS print queue untouched, so ESC/POS cut, drawer and raster commands still work).
 
@@ -330,7 +330,7 @@ if (!res.success) console.error(res.code, res.error); // e.g. notFound, busy, ti
 ```
 
 > [!NOTE]
-> On **macOS**, Chrome and Edge can also reach USB printers directly (WebUSB), so a web app can print there without the bridge. On **Windows** and **Linux** the operating system keeps USB printers for itself, which is the gap the bridge fills.
+> Plug and print on all three systems: the bridge finds a connected USB receipt printer by itself, with no driver and no printer setup. (On **macOS**, Chrome and Edge can also reach USB printers directly through WebUSB.)
 
 > [!WARNING]
 > A few printers (for example some older Epson TM models) use a **vendor-specific** USB mode that Windows doesn't drive on its own: install the maker's driver, then pick the printer under **Installed Windows printers**. Printers that show up as a **COM port** are serial devices, not USB printers, to the bridge.

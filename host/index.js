@@ -313,7 +313,7 @@ function usbFailure(e) {
 function usbCapabilities() {
   if (PLATFORM === 'win') return { devices: true, queues: true, helper: fs.existsSync(WIN_HELPER_SCRIPT) };
   if (PLATFORM === 'linux') return { devices: true, queues: true };
-  return { devices: false, queues: true, webUsb: true };
+  return { devices: fs.existsSync(MAC_USB_BACKEND), queues: true };
 }
 
 function clampTimeout(ms) {
@@ -349,10 +349,7 @@ async function listUsbPrinters(opts) {
       });
     }
   } else {
-    notes.push({
-      code: 'webUsbPreferred', level: 'info',
-      message: 'On macOS, Chrome can reach USB printers directly, so web apps often need no bridge. Printers added in System Settings → Printers & Scanners are listed here and print through the bridge.',
-    });
+    printers.push(...await listMacUsbDevices());
   }
   const cups = await listCupsQueues(opts);
   if (cups.available) {
@@ -429,6 +426,9 @@ async function printToUsbTarget(id, data, timeoutMs, jobName) {
       if (!device.accessible) throw new UsbError('permissionDenied');
       return writeLinuxDevice(device.path, data, timeoutMs);
     }
+    case 'mac-usb':
+      requirePlatform('mac');
+      return printMacUsb(rest, data, timeoutMs, jobName);
     case 'cups':
       if (PLATFORM === 'win') throw new UsbError('unsupported');
       return printCups(rest, data, timeoutMs, jobName);
@@ -817,11 +817,13 @@ function safeDecode(s) {
   try { return decodeURIComponent(s.replace(/\+/g, ' ')); } catch (_) { return s; }
 }
 
-// Ties each CUPS queue to the USB device it drives (Linux), by serial number.
+// Ties each CUPS queue to the USB device it drives: same device URI (macOS),
+// or same serial number (Linux).
 function linkQueuesToDevices(devices, queues) {
   for (const q of queues) {
-    if (q.connection !== 'usb' || !q.serialNumber) continue;
-    const dev = devices.find((d) => d.serialNumber && d.serialNumber === q.serialNumber);
+    if (q.connection !== 'usb') continue;
+    const dev = devices.find((d) => (d.uri && d.uri === q.uri) ||
+      (q.serialNumber && d.serialNumber && d.serialNumber === q.serialNumber));
     if (!dev) continue;
     q.devicePrinterId = dev.id;
     (dev.queues = dev.queues || []).push(q.name);
@@ -869,6 +871,191 @@ function printCups(queue, data, timeoutMs, jobName) {
       if (/does not exist|unknown destination|not found|no such file/i.test(msg)) return finish(new UsbError('notFound', 'This printer is no longer installed on the computer.', msg));
       if (/not accepting/i.test(msg)) return finish(new UsbError('busy', 'The printer is paused or not accepting jobs. Resume it in the system printer settings.', msg));
       finish(new UsbError('ioError', null, msg || `lp exited with code ${code}`));
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end(data);
+  });
+}
+
+// ─── macOS: USB printers through the system's own USB backend ────────────────
+// macOS ships its USB printer support as the CUPS `usb` backend, a program any
+// user may run (r-xr-xr-x). Run with no arguments it lists the connected USB
+// printers with their IEEE 1284 ID; run with a device URI it sends a job
+// straight to that printer. So a plugged-in receipt printer prints with no
+// driver and without being added in System Settings, as on Windows and Linux.
+// No native code in the bridge, and nothing new for macOS privacy prompts.
+
+const MAC_USB_BACKEND = '/usr/libexec/cups/backend/usb';
+
+async function listMacUsbDevices() {
+  if (!fs.existsSync(MAC_USB_BACKEND)) return [];
+  const [found, usbTree] = await Promise.all([runTool(MAC_USB_BACKEND, [], 15000), macUsbTree()]);
+  const devices = [];
+  // One line per printer: class uri "make-and-model" "info" "device-id" "location"
+  for (const line of found.stdout.split('\n')) {
+    const m = /^\S+\s+(usb:\/\/\S+)\s+"([^"]*)"\s+"([^"]*)"\s+"([^"]*)"/.exec(line.trim());
+    if (!m) continue;
+    const uri = m[1];
+    const info = parse1284(m[4]);
+    const fromUri = cupsUriInfo(uri);
+    const serialNumber = fromUri.serialNumber || info.serialNumber || null;
+    const hw = macUsbIds(usbTree, serialNumber, uri);
+    devices.push({
+      id: 'mac-usb:' + uri,
+      kind: 'device',
+      connection: 'usb',
+      name: usbDisplayName(info, m[3] || m[2], hw.vendorId, hw.productId),
+      manufacturer: info.manufacturer || fromUri.manufacturer,
+      model: info.model || fromUri.model,
+      commandSet: info.commandSet || null,
+      vendorId: hw.vendorId,
+      productId: hw.productId,
+      serialNumber,
+      uri,
+    });
+  }
+  return devices;
+}
+
+// USB vendor/product ids, which the backend doesn't report, from the IORegistry:
+// shown in the popup and used to find a printer again after a replug.
+async function macUsbTree() {
+  const r = await runTool('/usr/sbin/ioreg', ['-p', 'IOUSB', '-l', '-w', '0'], 8000);
+  const nodes = [];
+  let node = null;
+  for (const line of r.stdout.split('\n')) {
+    if (line.indexOf('+-o ') >= 0) {
+      node = {};
+      nodes.push(node);
+      continue;
+    }
+    const m = node && /"([^"]+)" = (.+)$/.exec(line);
+    if (!m) continue;
+    const value = m[2].trim().replace(/^"(.*)"$/, '$1');
+    if (m[1] === 'idVendor') node.vendorId = Number(value);
+    else if (m[1] === 'idProduct') node.productId = Number(value);
+    else if (m[1] === 'USB Serial Number' || m[1] === 'kUSBSerialNumberString') node.serial = value;
+    else if (m[1] === 'locationID') node.locationId = Number(value);
+  }
+  return nodes;
+}
+
+function macUsbIds(tree, serial, uri) {
+  const loc = /[?&]location=([0-9a-f]+)/i.exec(uri);
+  const location = loc ? parseInt(loc[1], 16) : null;
+  const node = tree.find((n) => (serial && n.serial === serial) || (location != null && n.locationId === location));
+  const ok = node && Number.isInteger(node.vendorId) && Number.isInteger(node.productId);
+  return { vendorId: ok ? node.vendorId : null, productId: ok ? node.productId : null };
+}
+
+// Runs the backend the way the print system would: argv[0] (and DEVICE_URI) is
+// the printer's URI, then job-id user title copies options, with the job on
+// stdin. fds 3 and 4 are the back- and side-channels it expects; the
+// back-channel is drained so a chatty printer can never stall it.
+//
+// Two backend habits are worked around, both measured on a POS-80:
+//  * Once every byte is written it announces +cups-waiting-for-job-completed,
+//    then waits ~7 s for a status reply most receipt printers never send (no
+//    option turns this off). The printer already has the whole receipt, so the
+//    job counts as done there and the backend is stopped.
+//  * macOS needs ~0.6 s to release the printer after that. A backend that
+//    finds it still held hangs ~5 s in its open call before it even says
+//    "Waiting for printer to become available". A healthy open takes ~15 ms,
+//    so a run that hasn't connected within the watchdog (400 ms, then 800 ms,
+//    1.6 s; after that the backend's own waiting applies, for a printer that
+//    is slow to wake) is stopped and retried. Retries only happen before any
+//    byte was written, so a receipt is never printed twice. Back-to-back
+//    receipts go out in about a second instead of five.
+const MAC_RETRY_MS = 250;
+const MAC_CONNECT_WATCHDOG_MS = [400, 800, 1600];
+
+async function printMacUsb(uri, data, timeoutMs, jobName) {
+  if (!/^usb:\/\//.test(uri)) {
+    throw new UsbError('invalidRequest', 'Unknown printer id. List the printers again with USB_LIST and choose one.');
+  }
+  const deadline = Date.now() + timeoutMs;
+  for (let n = 0; ; n++) {
+    const attempt = await macUsbAttempt(uri, data, Math.max(1000, deadline - Date.now()), jobName, MAC_CONNECT_WATCHDOG_MS[n] || 0);
+    if (attempt.sent) return { bytes: data.length };
+    if (!attempt.retry) throw attempt.error;
+    if (Date.now() + MAC_RETRY_MS >= deadline) {
+      // Still not free after the whole timeout: unplugged, switched off, or
+      // held by another program.
+      throw new UsbError('notFound', null, attempt.detail);
+    }
+    await new Promise((r) => setTimeout(r, MAC_RETRY_MS));
+  }
+}
+
+// One backend run. Resolves { sent } | { retry, detail } | { error }; never rejects.
+function macUsbAttempt(uri, data, timeoutMs, jobName, connectWatchdogMs) {
+  return new Promise((resolve) => {
+    let errText = '';
+    let done = false;
+    let watchdog = null;
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clearTimeout(watchdog);
+      resolve(result);
+    };
+    let user = 'localtcp';
+    try { user = require('os').userInfo().username || user; } catch (_) {}
+    const env = Object.assign({}, process.env, {
+      DEVICE_URI: uri,
+      PRINTER: 'LocalTCP',
+      CONTENT_TYPE: 'application/vnd.cups-raw',
+      FINAL_CONTENT_TYPE: 'application/vnd.cups-raw',
+      LC_ALL: 'C',
+      LANG: 'C',
+    });
+    let child;
+    try {
+      child = spawn(MAC_USB_BACKEND, ['1', user, jobName, '1', ''],
+        { argv0: uri, env, stdio: ['pipe', 'ignore', 'pipe', 'pipe', 'pipe'] });
+    } catch (e) {
+      return finish({ error: new UsbError('unsupported', 'The macOS USB printing tool could not be started.', e.message) });
+    }
+    const stop = () => {
+      try { child.kill('SIGTERM'); } catch (_) {}
+      setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 500).unref();
+    };
+    if (connectWatchdogMs > 0) {
+      watchdog = setTimeout(() => {
+        if (/STATE: -connecting-to-device/.test(errText) || /Wrote \d+ bytes/.test(errText)) return;
+        try { child.kill('SIGKILL'); } catch (_) {}
+        finish({ retry: true, detail: 'The printer was still held by the previous job.' });
+      }, connectWatchdogMs);
+    }
+    const timer = setTimeout(() => {
+      stop();
+      const wrote = /Wrote \d+ bytes/.test(errText);
+      if (!wrote && /Waiting for printer/i.test(errText)) finish({ retry: true, detail: errText });
+      else finish({ error: new UsbError('timeout', null, errText) });
+    }, timeoutMs);
+
+    child.stderr.on('data', (d) => {
+      errText = (errText + d).slice(-3000);
+      if (/STATE: \+cups-waiting-for-job-completed/.test(errText)) {
+        finish({ sent: true });
+        stop();
+      } else if (/Waiting for printer to become available/.test(errText) && !/Wrote \d+ bytes/.test(errText)) {
+        // Nothing written yet: safe to start over.
+        try { child.kill('SIGKILL'); } catch (_) {}
+        finish({ retry: true, detail: errText });
+      }
+    });
+    if (child.stdio[3]) child.stdio[3].on('data', () => {});
+    if (child.stdio[4]) child.stdio[4].on('error', () => {});
+    child.on('error', (e) => finish({ error: new UsbError('unsupported', 'The macOS USB printing tool could not be started.', e.message) }));
+    child.on('close', (code) => {
+      if (code === 0) return finish({ sent: true });
+      const lines = errText.split('\n').filter((l) => /^(ERROR|ALERT|CRIT|EMERG):/.test(l));
+      const detail = (lines.join(' ') || errText).trim() || `the USB backend exited with code ${code}`;
+      if (/not found|no such|unable to (open|locate)/i.test(detail)) return finish({ error: new UsbError('notFound', null, detail) });
+      if (/busy|in use|exclusive/i.test(detail)) return finish({ error: new UsbError('busy', null, detail) });
+      finish({ error: new UsbError('ioError', null, detail) });
     });
     child.stdin.on('error', () => {});
     child.stdin.end(data);

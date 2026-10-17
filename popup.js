@@ -438,8 +438,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     switch (usb.platform || detectOs()) {
       case 'win':
         return 'Connect your receipt printer with USB, switch it on and press refresh. Most receipt printers work without installing a driver.';
-      case 'mac':
-        return 'Add your receipt printer in System Settings → Printers & Scanners, then press refresh.';
       default:
         return 'Connect your receipt printer with USB, switch it on and press refresh.';
     }
