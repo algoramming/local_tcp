@@ -32,7 +32,19 @@ function Run-Uninstaller {
             Write-Host "[INFO] Chrome registration not found. Skipping." -ForegroundColor Gray
         }
 
-        # 2. Remove Files
+        # 2. Stop a running USB helper: it can hold its compiled DLL open, which
+        #    would stop the folder from being deleted. Only processes running
+        #    our own helper script are touched.
+        $helperScript = (Join-Path $INSTALL_DIR "usb_windows.ps1").ToLower()
+        Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains($helperScript) } |
+            ForEach-Object {
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                Write-Host "[OK] Stopped the running USB helper (PID $($_.ProcessId))." -ForegroundColor Green
+            }
+        Start-Sleep -Milliseconds 500
+
+        # 3. Remove Files
         if (Test-Path $INSTALL_DIR) {
             Write-Host "[INFO] Removing bridge files..." -ForegroundColor Gray
             Remove-Item -Path $INSTALL_DIR -Recurse -Force

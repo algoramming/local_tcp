@@ -72,6 +72,8 @@ function Run-Installer {
         Write-Host "[INFO] Installing files..." -ForegroundColor Gray
         Copy-Item "$PSScriptRoot\index.js" -Destination "$INSTALL_DIR\index.js" -Force
         Copy-Item "$PSScriptRoot\$MANIFEST_NAME" -Destination "$INSTALL_DIR\$MANIFEST_NAME" -Force
+        # USB printing helper, started by index.js on the first USB request.
+        Copy-Item "$PSScriptRoot\usb_windows.ps1" -Destination "$INSTALL_DIR\usb_windows.ps1" -Force
 
         # 4. Create robust .bat launcher
         Write-Host "[INFO] Creating execution launcher..." -ForegroundColor Gray

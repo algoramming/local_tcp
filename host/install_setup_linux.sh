@@ -50,6 +50,31 @@ ensure_node_installed() {
     echo -e "📍 Found Node at: ${GREEN}$(command -v node)${NC}"
 }
 
+# Linux keeps /dev/usb/lp* for root and the `lp` group. This udev rule hands USB
+# printers to whoever is signed in at the screen (systemd-logind "uaccess"), with
+# no re-login. Needs sudo once; skipped (with instructions) if that fails.
+UDEV_RULE_PATH="/etc/udev/rules.d/70-localtcp-usb-printers.rules"
+UDEV_RULE='# Local TCP Bridge: lets the signed-in user print to USB receipt printers
+# (/dev/usb/lp*) without root. Added by the Local TCP installer, removed by its
+# uninstaller.
+SUBSYSTEM=="usbmisc", KERNEL=="lp[0-9]*", TAG+="uaccess"'
+
+setup_usb_access() {
+    echo "🖨️  Setting up USB printer access (sudo may ask for your password)..."
+    if [ "$(cat "$UDEV_RULE_PATH" 2>/dev/null)" = "$UDEV_RULE" ]; then
+        echo -e "${GREEN}✅ USB printer access is already set up.${NC}"
+        return 0
+    fi
+    # The rule goes in on stdin: no temp file that someone could swap out.
+    if printf '%s\n' "$UDEV_RULE" | sudo sh -c 'umask 022 && cat > "$1" && { udevadm control --reload-rules; udevadm trigger --subsystem-match=usbmisc --action=change; true; }' sh "$UDEV_RULE_PATH"; then
+        echo -e "${GREEN}✅ USB printer access enabled.${NC}"
+    else
+        echo -e "${YELLOW}⚠️ USB printer access was not set up. To use USB printers later, run once:${NC}"
+        echo "   sudo usermod -aG lp \$USER   (then log out and back in)"
+    fi
+    return 0
+}
+
 run_installer() {
     echo -e "${BLUE}--------------------------------------------------${NC}"
     echo -e "${CYAN}           🚀 Local TCP Bridge - Smart Setup      ${NC}"
@@ -80,6 +105,9 @@ run_installer() {
 
     # 6. Generate manifest
     sed "s|HOST_PATH|$INSTALL_DIR/index.js|g" "$INSTALL_DIR/$HOST_NAME.json" > "$TARGET_DIR/$HOST_NAME.json"
+
+    # 7. USB printer access (optional; network printing works without it)
+    setup_usb_access
 
     echo -e "\n${GREEN}✅ Bridge installed successfully!${NC}"
     echo -e "📍 Location: $INSTALL_DIR"

@@ -8,11 +8,11 @@
 
 ### The missing link between web browsers and local TCP hardware.
 
-Local&nbsp;TCP is a Native Messaging bridge that lets web applications talk directly to local TCP hardware, like ESC/POS thermal printers, over a secure, millisecond-latency binary protocol. No cloud hop, no print server.
+Local&nbsp;TCP is a Native Messaging bridge that lets web applications talk directly to local hardware, like ESC/POS thermal printers on your network or plugged in by USB, over a secure, millisecond-latency binary protocol. No cloud hop, no print server.
 
 <br />
 
-![Version](https://img.shields.io/badge/version-2.1.1-5DC095?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-2.1.2-5DC095?style=for-the-badge)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-12876B?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-0B5C43?style=for-the-badge)
 ![Platforms](https://img.shields.io/badge/macOS·Windows·Linux-1E293B?style=for-the-badge)
@@ -35,6 +35,7 @@ Local&nbsp;TCP is a Native Messaging bridge that lets web applications talk dire
 | ⚡ **One-click setup** | Native installers for macOS `.pkg`, Windows `.exe`, and Linux `.run`. No terminal needed, and Node.js is auto-installed if it isn't already present. |
 | 🪶 **Lightweight host** | The bridge is a small Node.js script. Running through the system `node` is exactly what keeps it working under macOS 15/26 Local Network Privacy, where an unsigned standalone binary gets silently blocked from the LAN. |
 | 🛡️ **Enterprise security** | Chrome's Native Messaging sandbox plus a configurable **origin allowlist**, so you can lock the bridge down to only your own web apps. |
+| 🔌 **USB printers** | Prints to USB receipt printers on Windows, Linux and macOS, with no printer driver for standard USB printers. See [USB Printers](#-usb-printers). |
 | 🏎️ **Binary performance** | Streams raw ESC/POS bytes with millisecond precision and safe concurrent request correlation via `reqId`. |
 | 🌍 **Framework agnostic** | Works with Flutter Web, React, Vue, Angular, or any standard web framework. Registers with Chrome, Edge, Chromium, and Brave. |
 
@@ -50,7 +51,8 @@ flowchart LR
     A["🌐 Web App"] -->|"window.postMessage"| B["🧩 Content Script"]
     B -->|"runtime.sendMessage"| C["⚙️ Background<br/>Service Worker"]
     C -->|"Native Messaging<br/>reqId · JSON"| D["🔌 Native Host<br/>node index.js"]
-    D -->|"raw TCP · :9100"| E["🖨️ Thermal Printer"]
+    D -->|"raw TCP · :9100"| E["🖨️ Network Printer"]
+    D -->|"USB"| F["🖨️ USB Printer"]
 ```
 
 | Step | Layer | Responsibility |
@@ -58,7 +60,7 @@ flowchart LR
 | 1 | **Web App** | Sends a `window.postMessage` tagged with a unique `messageId`. |
 | 2 | **Content Script** | Forwards it to the background, then posts the reply back scoped to the page's own origin, never a `*` wildcard. |
 | 3 | **Background (Service Worker)** | Checks the origin allowlist, then relays the request (tagged with a `reqId`) to the native host over a single persistent port. |
-| 4 | **Native Host (Node.js)** | Opens a raw TCP socket to your hardware on port `9100`, writes the bytes, and echoes the `reqId` back so concurrent jobs never cross wires. |
+| 4 | **Native Host (Node.js)** | Opens a raw TCP socket to your hardware on port `9100`, or writes straight to a USB printer, then echoes the `reqId` back so concurrent jobs never cross wires. |
 
 ---
 
@@ -96,6 +98,8 @@ No admin rights needed; it installs per-user. If SmartScreen warns, choose **Mor
 chmod +x localtcp-linux-installer.run
 ./localtcp-linux-installer.run
 ```
+
+The same installer sets up network **and** USB printing: it asks for your password once (in the terminal, or in your desktop's password dialog) to add a udev rule for USB printers.
 
 </td>
 </tr>
@@ -289,6 +293,48 @@ The widget is rendered to a bitmap and sent as a single ESC/POS raster image, wh
 
 ---
 
+## 🔌 USB Printers
+
+Since **v2.1.2** the bridge also prints to **USB receipt printers**, including the ones a browser can't reach on its own. Standard USB printers need **no printer driver**: the bridge uses the USB printer support already built into the operating system.
+
+| System | How the bridge prints | One-time setup |
+|---|---|---|
+| 🪟 **Windows** | Straight to Windows' built-in USB printer driver (`usbprint.sys`), or RAW through any installed Windows printer | None |
+| 🐧 **Linux** | Straight to `/dev/usb/lp*`, or RAW through CUPS printers | The installer asks for your password once to add a udev rule allowing USB printer access |
+| 🍎 **macOS** | RAW through printers added in System Settings → Printers & Scanners | Add the printer there once |
+
+Printers are listed in two kinds: **`device`** (connected by USB; the bridge writes to it directly) and **`queue`** (an installed printer; the bytes pass through the OS print queue untouched, so ESC/POS cut, drawer and raster commands still work).
+
+**In the popup:** switch to the **USB** tab, press **Test print**, and optionally **Set as default**. `USB_PRINT` without a `printerId` uses the default.
+
+```js
+// USB needs bridge v2.1.1+, which reports its features
+const info = await printer.checkBridge();
+if (!(info.features || []).includes('usb')) alert('Please update Local TCP.');
+
+// 1. Find the printers the bridge can reach
+const { printers } = await printer._send({ action: 'USB_LIST' });
+const p = printers[0]; // { id, kind, name, vendorId, productId, serialNumber, ... }
+
+// 2. Print. Base64 keeps big raster receipts small. `match` lets the bridge
+//    find the printer again if it was moved to another USB port.
+const res = await printer._send({
+  action: 'USB_PRINT',
+  printerId: p.id,
+  match: { vendorId: p.vendorId, productId: p.productId, serialNumber: p.serialNumber },
+  dataB64: btoa(String.fromCharCode(...bytes)),
+});
+if (!res.success) console.error(res.code, res.error); // e.g. notFound, busy, timeout
+```
+
+> [!NOTE]
+> On **macOS**, Chrome and Edge can also reach USB printers directly (WebUSB), so a web app can print there without the bridge. On **Windows** and **Linux** the operating system keeps USB printers for itself, which is the gap the bridge fills.
+
+> [!WARNING]
+> A few printers (for example some older Epson TM models) use a **vendor-specific** USB mode that Windows doesn't drive on its own: install the maker's driver, then pick the printer under **Installed Windows printers**. Printers that show up as a **COM port** are serial devices, not USB printers, to the bridge.
+
+---
+
 ## 📨 Message Protocol Reference
 
 For any other client, this is the full contract. Post to `window` with `source: "localtcp_req"` and a unique `messageId`; the response returns on a `window` `message` event with `source: "localtcp_res"` and the **same** `messageId`.
@@ -307,6 +353,10 @@ For any other client, this is the full contract. Post to `window` with `source: 
 | `port` | number | default `9100` |
 | `data` | number[] | ESC/POS bytes, a plain array |
 | `readTimeoutMs` | number | optional; wait for a reply |
+| `printerId` | string | USB: an `id` from `USB_LIST` (omit → popup default) |
+| `match` | object | USB, optional: `{vendorId, productId, serialNumber}` |
+| `dataB64` | string | USB: the bytes as base64 |
+| `timeoutMs` | number | USB, optional: default `20000` |
 
 </td><td valign="top" width="50%">
 
@@ -319,14 +369,17 @@ For any other client, this is the full contract. Post to `window` with `source: 
 | `version` | string | installed host version |
 | `bytesSent` | number | `PRINT` / `SEND` |
 | `data` | number[] | bytes read back |
+| `features` | string[] | `CHECK_BRIDGE`, e.g. `["tcp","usb"]` |
+| `printers` | object[] | `USB_LIST` |
+| `code` | string | USB failure code |
 | `error` | string | present on failure |
 
 </td></tr>
 </table>
 
-**Actions:** &nbsp; `CHECK_BRIDGE` · `CONNECT` · `PRINT` · `SEND` · `DISCONNECT` · `PING`
+**Actions:** &nbsp; `CHECK_BRIDGE` · `CONNECT` · `PRINT` · `SEND` · `DISCONNECT` · `USB_LIST` · `USB_PRINT` · `PING`
 
-A high-level alias is also accepted: `{ type: "LOCAL_TCP_PRINT", payload: { host, port, bytes, readTimeoutMs } }`, where `bytes` maps to `data`. Concurrent jobs to the same printer are serialized by the native host, so byte streams never interleave.
+A high-level alias is also accepted: `{ type: "LOCAL_TCP_PRINT", payload: { host, port, bytes, readTimeoutMs } }`, where `bytes` maps to `data`. Concurrent jobs to the same printer are serialized by the native host, so byte streams never interleave. USB failures carry a stable `code`: `notFound`, `busy`, `permissionDenied`, `timeout`, `ioError`, `noPrinter` or `bridgeOutdated`.
 
 ---
 
@@ -338,7 +391,7 @@ Just as easy as installing. In the extension popup click **Uninstall Setup Kit**
 |---|---|
 | 🪟 **Windows** | Run `localtcp-windows-uninstaller.exe`, or Start Menu → **Uninstall Local TCP Bridge**, or Settings → **Apps** → Uninstall. |
 | 🍎 **macOS** | Double-click `localtcp-mac-uninstaller.pkg` → **Continue** → **Install** → enter your password → **Done**. |
-| 🐧 **Linux** | Run `localtcp-linux-uninstaller.run` the same way you ran the installer. |
+| 🐧 **Linux** | Run `localtcp-linux-uninstaller.run` the same way you ran the installer. It also removes the USB printer access rule, so it may ask for your password. |
 
 To remove the extension itself, open `chrome://extensions` and remove **Local TCP**.
 
@@ -346,7 +399,7 @@ To remove the extension itself, open `chrome://extensions` and remove **Local TC
 
 ## 🛠️ Building From Source
 
-The native host is `host/index.js` (Node.js), no build step. The cross-platform installer that registers it lives in `installers/rust/`:
+The native host is `host/index.js` (Node.js), no build step. On Windows it reaches USB printers through `host/usb_windows.ps1`, a PowerShell helper it starts on first use (the C# inside is compiled once and cached next to it). The cross-platform installer that registers it lives in `installers/rust/`:
 
 ```bash
 # Build the installer for the machine you're on (requires Rust)

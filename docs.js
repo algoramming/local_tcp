@@ -57,7 +57,7 @@
   });
 
   // ── Pull the live version from the extension manifest ─────────
-  // The v2.1.1 text in the markup is only a fallback; this keeps every
+  // The v2.1.2 text in the markup is only a fallback; this keeps every
   // version badge in sync with manifest.json's "version" field.
   fetch('manifest.json', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : null; })
