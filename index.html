@@ -804,7 +804,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
             <tbody>
               <tr><td><strong>Windows</strong></td><td>Straight to Windows' built-in USB printer driver, or through any installed Windows printer</td><td class="yes">None</td></tr>
               <tr><td><strong>Linux</strong></td><td>Straight to <code>/dev/usb/lp*</code>, or through CUPS printers</td><td>The installer asks for your password once to allow USB printer access</td></tr>
-              <tr><td><strong>macOS</strong></td><td>Through printers added in System Settings → Printers &amp; Scanners</td><td>Add the printer there once</td></tr>
+              <tr><td><strong>macOS</strong></td><td>Straight to the printer through macOS's built-in USB printing support, or through printers added in System Settings</td><td class="yes">None</td></tr>
             </tbody>
           </table>
         </div>
@@ -846,7 +846,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
 
     <div class="callout tip">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2h6c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>
-      <div>On <strong>macOS</strong>, Chrome and Edge can also reach USB printers directly (WebUSB), so a web app can print there without the bridge. On <strong>Windows</strong> and <strong>Linux</strong> the operating system keeps USB printers for itself, which is exactly the gap the bridge fills.</div>
+      <div>Plug and print on all three systems: the bridge finds a connected USB receipt printer by itself, with no driver and no printer setup. (On <strong>macOS</strong>, Chrome and Edge can also reach USB printers directly through WebUSB.)</div>
     </div>
     <div class="callout warn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -951,7 +951,7 @@ printer.<span class="tok-f">dispose</span>(); <span class="tok-c">// closes sock
           <li><div><h4>Add the extension</h4><p>Install Local TCP from the Chrome Web Store. On first install it opens a setup tab and starts your download automatically.</p></div></li>
           <li><div><h4>Open the installer</h4><p>Double-click <span class="kbd">localtcp-mac-installer.pkg</span> → <strong>Continue</strong> → <strong>Install</strong>. macOS prompts for your password, then the host installs for your user account.</p></div></li>
           <li><div><h4>Restart Chrome</h4><p>Quit Chrome completely and reopen it. The popup flips to <strong>Bridge Linked</strong> on its own, with no manual re-check.</p></div></li>
-          <li><div><h4>Test the connection</h4><p>Open the popup, enter your printer's <strong>IP</strong> and <strong>port</strong> (usually <span class="kbd">9100</span>), and hit <strong>Test Connection</strong>. For a USB printer added in System Settings, switch to the <strong>USB</strong> tab and press <strong>Test print</strong>.</p></div></li>
+          <li><div><h4>Test the connection</h4><p>Open the popup, enter your printer's <strong>IP</strong> and <strong>port</strong> (usually <span class="kbd">9100</span>), and hit <strong>Test Connection</strong>. For a USB receipt printer, plug it in, switch to the <strong>USB</strong> tab and press <strong>Test receipt</strong>; no driver and no System Settings step needed.</p></div></li>
         </ol>
         <div class="callout tip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
