@@ -309,7 +309,7 @@ Printers come in two kinds: **`device`** (connected by USB; the bridge writes to
 
 Each printer also has a **`category`**: `receipt` (it reports ESC/POS, or has a receipt-printer name), `other` (an office, PDF or label printer: raw ESC/POS would print as symbols) or `unknown`. Receipt printers come first, with `paperWidthMm` when the model name gives it away (`XP-80C` → 80). An installed queue that drives a listed USB device carries `devicePrinterId`, so the same printer isn't shown twice.
 
-**In the popup:** switch to the **USB** tab. Receipt printers are listed first (office printers are folded away). Press **Test receipt** to check the paper width, text styles, a barcode and the cutter, and optionally **Set as default**. `USB_PRINT` without a `printerId` uses the default.
+**In the popup:** switch to the **USB** tab. Receipt printers are listed first (office printers are folded away). Press **Test receipt** to check the paper width, text styles, a QR code and the cutter, and optionally **Set as default**. `USB_PRINT` without a `printerId` uses the default.
 
 ```js
 // USB needs bridge v2.1.2+, which reports its features
