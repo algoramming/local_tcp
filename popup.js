@@ -1,6 +1,6 @@
 // Local TCP - popup.js
-// Handles configuration, UI states, bridge status, USB printers, and the security
-// allowlist. The Setup Kit button downloads a one-click installer from GitHub Releases.
+// Handles configuration, UI states, bridge status, USB printers, test prints and the
+// security allowlist. The Setup Kit button downloads a one-click installer from GitHub Releases.
 
 const RELEASE_BASE = 'https://github.com/algoramming/local_tcp/releases/latest/download/';
 // Full single-page documentation (features, architecture, protocol, install/uninstall guides).
@@ -61,6 +61,155 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text != null) node.textContent = text;
   return node;
+}
+
+// ─── Test receipt ────────────────────────────────────────────────────────────
+// The test receipt doubles as a business card for Algoramming, the team behind
+// Local TCP. Copy from algoramming.com; plain ASCII so any code page prints it.
+const RECEIPT_BRAND = {
+  name: 'ALGORAMMING',
+  tagline: 'Innovation in every step',
+  headline: 'Custom software development that empowers your business.',
+  about: 'An independent software studio in Dhaka, building for teams in 12+ countries.',
+  services: ['Software', 'Mobile', 'Web', 'UI/UX', 'AI & Automation', 'Cloud & DevOps'],
+  product: 'ALGONIZE',
+  productAbout: 'Cloud ERP, CRM & POS for retail and restaurants.',
+  url: 'https://www.algoramming.com',
+  site: 'www.algoramming.com',
+  email: 'support@algoramming.com',
+  phone: '+880 1400 629698'
+};
+
+// ESC/POS bytes for the test receipt: a brand plate, printer details, style and
+// paper-width checks, a short company profile, a QR code to the website, a cut.
+// Laid out on 32 columns and centred: that fills 58 mm paper and sits as a neat
+// column on 80 mm (the bridge only guesses the width, so nothing relies on it).
+function buildTestTicket({ printerName, link, paperWidthMm }) {
+  const COLS = 32;
+  const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
+  const b = RECEIPT_BRAND;
+  const out = [];
+  const raw = (...bytes) => { out.push(...bytes); };
+  const text = (s) => {
+    for (const c of String(s)) {
+      const code = c.charCodeAt(0);
+      out.push(code >= 0x20 && code < 0x7f ? code : 0x3f); // '?' for anything else
+    }
+  };
+  const line = (s = '') => { text(s); raw(LF); };
+  const bold = (on) => raw(ESC, 0x45, on ? 1 : 0);          // ESC E n
+  const size = (n) => raw(GS, 0x21, n);                       // GS ! n: 0x01 tall, 0x11 double
+  const reverse = (on) => raw(GS, 0x42, on ? 1 : 0);        // GS B n
+  const underline = (on) => raw(ESC, 0x2d, on ? 1 : 0);     // ESC - n
+
+  // Packs tokens into lines of at most COLS, so the printer never wraps a
+  // centred line on its own.
+  const pack = (tokens, sep) => {
+    const lines = [];
+    let cur = '';
+    for (const t of tokens) {
+      if (cur && (cur + sep + t).length > COLS) { lines.push(cur); cur = t; }
+      else cur = cur ? cur + sep + t : t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+  const para = (s) => pack(String(s).split(/\s+/).filter(Boolean), ' ').forEach((l) => line(l));
+  const rule = (ch) => line(ch.repeat(COLS));
+  // Label left, value right, exactly COLS wide so centring keeps the block
+  // aligned. A value too long for the label's line goes right-aligned below it.
+  const row = (label, value) => {
+    value = String(value);
+    if (label.length + 1 + value.length <= COLS) return line(label + value.padStart(COLS - label.length));
+    line(label.padEnd(COLS));
+    pack(value.split(/\s+/).filter(Boolean), ' ').forEach((l) => line(l.slice(0, COLS).padStart(COLS)));
+  };
+  const spaced = (s) => s.split('').join(' ');
+  const digits = (n) => '1234567890'.repeat(5).slice(0, n);
+
+  // GS ( k: QR code, model 2, error correction M.
+  const qr = (data, moduleSize) => {
+    const bytes = Array.from(data, (c) => c.charCodeAt(0) & 0xff);
+    const len = bytes.length + 3;
+    raw(GS, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00);             // model 2
+    raw(GS, 0x28, 0x6b, 3, 0, 0x31, 0x43, moduleSize);             // module size
+    raw(GS, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x31);                   // error correction M
+    raw(GS, 0x28, 0x6b, len & 0xff, len >> 8, 0x31, 0x50, 0x30, ...bytes); // store
+    raw(GS, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30);                   // print
+  };
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+  raw(ESC, 0x40);                     // ESC @   initialise
+  raw(ESC, 0x61, 1);                  // ESC a 1 centre everything below
+
+  // Brand plate
+  line();
+  size(0x11); bold(true); reverse(true);
+  text(` ${b.name} `);
+  reverse(false); bold(false); size(0x00); raw(LF);
+  line(b.tagline);
+  line();
+  rule('=');
+
+  // Printer check
+  line();
+  size(0x01); bold(true); line('TEST RECEIPT'); bold(false); size(0x00);
+  para('If you can read this, your printer is connected and ready.');
+  line();
+  rule('-');
+  row('Printer', printerName);
+  row('Connection', link);
+  if (paperWidthMm) row('Paper', `${paperWidthMm} mm`);
+  row('Printed', stamp);
+  rule('-');
+  line();
+  bold(true); text('Bold'); bold(false); text('   ');
+  underline(true); text('Underline'); underline(false); text('   ');
+  reverse(true); text(' Reverse '); reverse(false); raw(LF);
+  line();
+  // One unbroken line of digits = the paper holds that many characters.
+  line('58 mm paper / 32 columns');
+  line(digits(32));
+  line('80 mm paper / 48 columns');
+  line(digits(48));
+  line();
+  rule('=');
+
+  // About Algoramming
+  line();
+  bold(true); line(spaced('ABOUT US')); bold(false);
+  line();
+  bold(true); para(b.headline); bold(false);
+  line();
+  para(b.about);
+  line();
+  pack(b.services, ' | ').forEach((l) => line(l));
+  line();
+  bold(true); line(`Makers of ${b.product}`); bold(false);
+  para(b.productAbout);
+  line();
+
+  // Website: QR code, then the link in text for printers without QR support.
+  qr(b.url, 6);
+  line();
+  line('Scan to visit our website');
+  line();
+  size(0x01); bold(true); line(b.site); bold(false); size(0x00);
+  line(b.email);
+  line(b.phone);
+  line();
+  rule('=');
+  bold(true); line('Thank you for using Local TCP'); bold(false);
+  raw(ESC, 0x4d, 1);                  // ESC M 1 small font for the fine print
+  line(`v${chrome.runtime.getManifest().version}  -  Built by Algoramming`);
+  raw(ESC, 0x4d, 0);
+
+  raw(ESC, 0x64, 4);                  // ESC d 4    feed
+  raw(GS, 0x56, 0x42, 0x00);          // GS V 66 0  feed to the cutter and cut
+  return out;
 }
 
 // chrome.runtime.sendMessage as a promise that always resolves to an object.
@@ -169,8 +318,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ─── Network | USB tabs ──────────────────────────────────────────────────────
   const segButtons = document.querySelectorAll('.seg-btn');
   const panes = document.querySelectorAll('.pane');
+  let currentPane = 'network';
 
   function showPane(name) {
+    currentPane = name;
     segButtons.forEach((b) => {
       const on = b.dataset.pane === name;
       b.classList.toggle('active', on);
@@ -178,6 +329,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     panes.forEach((p) => p.classList.toggle('active', p.dataset.pane === name));
     chrome.storage.local.set({ popupPane: name });
+    setTestResult(null);
+    updateTestTarget();
     if (name === 'usb' && !usb.loaded && !usb.loading) loadUsbPrinters();
   }
   segButtons.forEach((b) => b.addEventListener('click', () => showPane(b.dataset.pane)));
@@ -348,12 +501,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const note of usb.notes) {
       const level = note.level === 'warn' ? 'warn' : note.level === 'error' ? 'error' : 'info';
       const opts = {};
-      let message = note.message;
+      const message = note.message;
       if (note.code === 'permissionDenied' && usb.platform === 'linux') opts.command = 'sudo usermod -aG lp $USER';
       if (note.code === 'usblpMissing') opts.command = 'sudo modprobe usblp';
-      if (note.code === 'webUsbPreferred') {
-        message = 'On a Mac, add the receipt printer once in System Settings → Printers & Scanners (any driver is fine: the bridge sends raw ESC/POS), then press refresh.';
-      }
       addNotice(level, message, opts);
     }
   }
@@ -413,7 +563,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     testBtnRow.title = p.accessible === false
       ? 'Allow USB printer access first (see the note above).'
       : isReceipt
-        ? 'Print a short test receipt: paper width, styles, barcode and cut'
+        ? 'Print a test receipt: paper width, styles, a QR code and the cut'
         : 'This does not look like a receipt printer: it may print a page of symbols.';
     testBtnRow.addEventListener('click', () => testUsbPrint(p, testBtnRow));
     actions.appendChild(testBtnRow);
@@ -443,7 +593,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // The Test Print card's USB target depends on the list, so keep it in step.
   function renderUsb() {
+    renderUsbList();
+    updateTestTarget();
+  }
+
+  function renderUsbList() {
     usbNotices.replaceChildren();
     usbListEl.replaceChildren();
     usbEmpty.hidden = true;
@@ -516,53 +672,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderUsb();
   }
 
-  // A POS test receipt: header, printer details, a paper-width check, text
-  // styles, a barcode and a cut. Plain ASCII so any code page prints it.
-  function buildTestTicket(p) {
-    const ascii = (s) => Array.from(String(s), (c) => {
-      const code = c.charCodeAt(0);
-      return code >= 0x20 && code < 0x7f ? code : 0x3f; // '?' for anything else
-    });
-    const LF = 0x0a;
-    const pad = (n) => String(n).padStart(2, '0');
-    const d = new Date();
-    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const rule = [...ascii('-'.repeat(32)), LF];
-    const digits = (n) => ascii('1234567890'.repeat(5).slice(0, n));
-    const link = p.kind === 'device' ? 'USB, no driver' : (usb.platform === 'win' ? 'Windows driver' : 'Print queue');
-    return [
-      0x1b, 0x40,                               // ESC @     initialise
-      0x1b, 0x61, 0x01,                         // ESC a 1   centre
-      0x1d, 0x21, 0x11, 0x1b, 0x45, 0x01,       // GS ! 0x11 double size, ESC E 1 bold
-      ...ascii('LOCAL TCP'), LF,
-      0x1d, 0x21, 0x00, 0x1b, 0x45, 0x00,
-      ...ascii('Receipt printer test'), LF, LF,
-      0x1b, 0x61, 0x00,                         // ESC a 0   left
-      ...rule,
-      ...ascii(`Printer: ${p.name || 'USB printer'}`), LF,
-      ...ascii(`Link:    ${link}`), LF,
-      ...ascii(`Time:    ${stamp}`), LF,
-      ...rule,
-      ...ascii('Paper width check'), LF,
-      ...ascii('58 mm paper: 32 characters'), LF,
-      ...digits(32), LF,
-      ...ascii('80 mm paper: 48 characters'), LF,
-      ...digits(48), LF,
-      ...rule,
-      0x1b, 0x45, 0x01, ...ascii('Bold'), 0x1b, 0x45, 0x00, ...ascii('  '),
-      0x1b, 0x2d, 0x01, ...ascii('Underline'), 0x1b, 0x2d, 0x00, ...ascii('  '),
-      0x1d, 0x42, 0x01, ...ascii(' Reverse '), 0x1d, 0x42, 0x00, LF, LF,
-      0x1b, 0x61, 0x01,                         // centre
-      0x1d, 0x68, 0x50,                         // GS h 80   barcode height
-      0x1d, 0x77, 0x02,                         // GS w 2    module width
-      0x1d, 0x48, 0x02,                         // GS H 2    numbers below
-      0x1d, 0x6b, 0x04, ...ascii('TEST1234'), 0x00, // GS k 4  CODE39
-      LF, LF,
-      ...ascii('If this looks right, the printer'), LF,
-      ...ascii('is ready for receipts.'), LF,
-      0x1b, 0x64, 0x05,                         // ESC d 5   feed
-      0x1d, 0x56, 0x42, 0x00                    // GS V 66 0 feed and partial cut
-    ];
+  function usbLink(p) {
+    return p.kind === 'device' ? 'USB, no driver' : (usb.platform === 'win' ? 'Windows driver' : 'Print queue');
   }
 
   function toBase64(bytes) {
@@ -579,11 +690,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       action: 'USB_PRINT',
       printerId: p.id,
       match: matchOf(p),
-      dataB64: toBase64(buildTestTicket(p)),
+      dataB64: toBase64(buildTestTicket({ printerName: p.name || 'USB printer', link: usbLink(p), paperWidthMm: p.paperWidthMm })),
       jobName: 'Local TCP test receipt'
     });
     if (res.success) {
-      usb.results[p.id] = { type: 'success', text: 'Test receipt sent. Check the paper width line, the barcode and the cut.' };
+      usb.results[p.id] = { type: 'success', text: 'Test receipt sent. Check the paper width lines, the QR code and the cut.' };
       addLog(`Test receipt sent to ${p.name} (${res.bytesSent} bytes).`, 'success');
       // The printer came back under another id (new USB port): follow it.
       if (res.resolvedPrinterId && usb.defaultPrinter && usb.defaultPrinter.id === p.id) {
@@ -598,9 +709,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (res.resolvedPrinterId) {
       await loadUsbPrinters({ quiet: true });
-      return;
+      return res;
     }
     renderUsb();
+    return res;
   }
 
   usbRefreshBtn.addEventListener('click', async () => {
@@ -609,6 +721,112 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkBridge();
     await loadUsbPrinters();
   });
+
+  // ─── Test print ──────────────────────────────────────────────────────────────
+  // One button that follows the tab: the Network tab prints the test receipt to
+  // the IP/port typed above, the USB tab to the default USB printer (or the only
+  // one connected). Same ticket as a USB row's Test receipt button.
+  const testTargetEl = document.getElementById('testTarget');
+  const testPrintBtn = document.getElementById('testPrintBtn');
+  const testResultEl = document.getElementById('testResult');
+  let testPrinting = false;
+
+  function networkTarget() {
+    const host = hostInput.value.trim();
+    const port = parseInt(portInput.value.trim());
+    return host && port >= 1 && port <= 65535 ? { host, port } : null;
+  }
+
+  // The default receipt printer while it's connected, otherwise the only one.
+  function usbTestTarget() {
+    const def = usb.defaultPrinter;
+    const p = def && usb.printers.find((x) => x.id === def.id);
+    if (p) return { printer: p, isDefault: true };
+    const main = visiblePrinters();
+    if (main.length === 1) return { printer: main[0], isDefault: false };
+    return {
+      reason: main.length
+        ? `${main.length} USB receipt printers found: set one as default, or use its own Test receipt button.`
+        : 'Connect a USB receipt printer, switch it on and press refresh.'
+    };
+  }
+
+  // Caption naming where the test receipt goes, and whether it can go at all.
+  function updateTestTarget() {
+    let parts = null;
+    let reason = null;
+    if (currentPane === 'usb') {
+      if (bridge && !bridgeSupportsUsb()) reason = 'USB printing needs a newer bridge (see above).';
+      else if (usb.loading || !usb.loaded) reason = 'Looking for USB receipt printers…';
+      else if (usb.error) reason = 'Could not list USB printers (see above).';
+      else {
+        const t = usbTestTarget();
+        if (!t.printer) reason = t.reason;
+        else if (t.printer.accessible === false) reason = `${t.printer.name || 'The USB printer'} needs permission first (see the note above).`;
+        else parts = ['Prints a test receipt on ', t.printer.name || 'USB printer', t.isDefault ? ' (default) over USB.' : ' over USB.'];
+      }
+    } else {
+      const t = networkTarget();
+      if (t) parts = ['Prints a test receipt on ', `${t.host}:${t.port}`, ' over the network.'];
+      else reason = 'Enter the printer IP address and port above.';
+    }
+    if (parts) testTargetEl.replaceChildren(parts[0], el('b', null, parts[1]), parts[2]);
+    else testTargetEl.textContent = reason;
+    testPrintBtn.disabled = testPrinting || !parts;
+  }
+
+  function setTestResult(result) {
+    testResultEl.hidden = !result;
+    if (!result) return;
+    testResultEl.className = `test-result ${result.type}`;
+    testResultEl.textContent = result.text;
+  }
+
+  async function printNetworkTest({ host, port }) {
+    addLog(`Printing a test receipt on ${host}:${port}...`, 'info');
+    const res = await sendMessage({
+      action: 'PRINT',
+      host,
+      port,
+      data: buildTestTicket({ printerName: `${host}:${port}`, link: 'Network (TCP)' })
+    });
+    if (res.success) {
+      addLog(`Test receipt sent to ${host}:${port} (${res.bytesSent} bytes).`, 'success');
+    } else {
+      addLog(`Test receipt failed: ${res.error || 'unknown error'}`, 'error');
+    }
+    return res;
+  }
+
+  testPrintBtn.addEventListener('click', async () => {
+    const pane = currentPane;
+    const target = pane === 'usb' ? usbTestTarget().printer : networkTarget();
+    if (!target) return;
+
+    testPrinting = true;
+    testPrintBtn.classList.add('loading');
+    setTestResult(null);
+    updateTestTarget();
+    let res;
+    try {
+      res = pane === 'usb' ? await testUsbPrint(target, testPrintBtn) : await printNetworkTest(target);
+    } finally {
+      testPrinting = false;
+      testPrintBtn.classList.remove('loading');
+      updateTestTarget();
+    }
+
+    if (currentPane !== pane) return; // switched tabs while it printed
+    const where = pane === 'usb' ? (target.name || 'USB printer') : `${target.host}:${target.port}`;
+    setTestResult(res.success
+      ? { type: 'success', text: `Sent to ${where}. Check the paper width lines, the QR code and the cut.` }
+      : { type: 'error', text: res.error || 'The test receipt failed.' });
+  });
+
+  [hostInput, portInput].forEach((input) => input.addEventListener('input', () => {
+    setTestResult(null);
+    updateTestTarget();
+  }));
 
   // Auto-poll: once the user runs the installer, the bridge registers and we flip
   // to "Bridge Linked" on our own — no Chrome restart, no manual re-check.
@@ -760,6 +978,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       await chrome.storage.local.remove(['printerHost', 'printerPort']);
       hostInput.value = '';
       portInput.value = '';
+      setTestResult(null);
+      updateTestTarget();
       addLog('Printer config reset. Security allowlist kept.', 'warning');
     }
   });

@@ -10,7 +10,7 @@
 #   ./build.sh aarch64-apple-darwin
 #
 # The cleanest path for shipping all three OSes is the GitHub Actions matrix in
-# .github/workflows/installer.yml — each runner builds its own native binary.
+# .github/workflows/release.yml — each runner builds its own native binary.
 set -euo pipefail
 cd "$(dirname "$0")"
 
